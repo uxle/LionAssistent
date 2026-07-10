@@ -1,0 +1,40 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/common",
+    "crates/utilities",
+    "crates/config",
+    "crates/logger",
+    "crates/event-bus",
+    "crates/app",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+# Shared dependency versions. Member crates pull these in with
+# `dep = { workspace = true }` so every crate in the workspace stays on the
+# same version (DIG SS5 coding standards, Apis SS1 API design principles).
+[workspace.dependencies]
+common = { path = "crates/common" }
+utilities = { path = "crates/utilities" }
+config = { path = "crates/config" }
+logger = { path = "crates/logger" }
+event-bus = { path = "crates/event-bus" }
+
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+thiserror = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+# Pinned <1.13: uuid 1.13+ requires getrandom ^0.3, and 1.21+ requires
+# getrandom ^0.4, which requires the `edition2024` Cargo feature -- not
+# supported by this sandbox's Rust 1.75. On a modern toolchain (1.85+),
+# remove this pin and run `cargo update -p uuid` to pick up the latest.
+uuid = { version = "=1.12.1", features = ["v4", "serde"] }

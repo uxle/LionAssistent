@@ -1,0 +1,15 @@
+/target
+**/target
+*.rs.bk
+*.pdb
+.DS_Store
+
+# Local runtime data (DBDMS SS2 storage structure) -- never committed.
+/data/
+/logs/
+*.log
+.env
+
+# Downloaded local models are large binaries, not source.
+/models/**
+!/models/**/.gitkeep

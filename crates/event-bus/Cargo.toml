@@ -1,0 +1,10 @@
+[package]
+name = "event-bus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The application-wide event bus (Archd SS9, Apis SS13)."
+
+[dependencies]
+common = { workspace = true }
+tokio = { workspace = true }
