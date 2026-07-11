@@ -6,6 +6,16 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 3)
+
+- `conversation` crate: `Role`, `Message`, `Conversation`.
+- `session-manager` crate: `Session`, `SessionManager` (in-memory; SQLite persistence is Phase 5).
+- `context-manager` crate: `ContextBuilder`, character-budget history selection.
+- `prompt-builder` crate: `PromptFormatter` trait + `GemmaPromptFormatter` (real Gemma chat template).
+- `assistant-core` crate: `ResponseGenerator` trait + `EchoResponseGenerator` stub + `AssistantCore::process_message` end-to-end pipeline.
+- `app` runs assistant-core as a background Tokio task; `ui` now subscribes to `Event::ResponseGenerated` instead of faking a reply locally.
+- 26/26 tests passing across all Phase 1 + Phase 3 crates (no Slint dependency in any of them).
+
 ### Added (Phase 2)
 
 - `ui` crate: `theme.slint` (Palette global, dark/light design tokens), `app-window.slint` (header with theme toggle, sidebar nav, chat bubbles styled per role, composer).

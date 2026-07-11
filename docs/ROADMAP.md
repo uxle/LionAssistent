@@ -8,7 +8,7 @@ actually exists versus what's still planned.
 |---|---|---|
 | 1 | Foundation | 🟢 Done -- workspace, `common`, `config`, `logger`, `event-bus`, `app` stub. CI/build scripts done. Fully verified (build+test+run) in-sandbox. |
 | 2 | UI Framework (Slint) | 🟡 Written, NOT compile-verified in this sandbox -- see note below. Main window, theme (dark/light), sidebar nav, chat bubbles, composer done. |
-| 3 | Assistant Core | ⬜ Not started |
+| 3 | Assistant Core | 🟢 Done and fully verified -- conversation, session-manager, context-manager, prompt-builder, assistant-core all build+test clean in this sandbox (no Slint dependency). Stub response generator only; real LLM is Phase 4. |
 | 4 | LLM Runtime | ⬜ Not started |
 | 5 | Memory | ⬜ Not started |
 | 6 | Planner & Reasoning | ⬜ Not started |
@@ -74,3 +74,15 @@ available, not a redesign.
 
 `cargo build -p common -p utilities -p config -p logger -p event-bus`
 still works fine in this sandbox and is unaffected by any of this.
+
+## Phase 3 checklist
+
+- [x] `conversation`: `Role`, `Message` (matches DBDMS Messages table, `token_count` reserved for Phase 4's tokenizer), `Conversation`
+- [x] `session-manager`: `Session` (matches DBDMS Sessions table), `SessionManager` (create/get/append/end) -- in-memory only, SQLite persistence is Phase 5
+- [x] `context-manager`: `ContextBuilder` -- keeps the newest messages within a character budget, always keeps at least the newest message
+- [x] `prompt-builder`: `PromptFormatter` trait + `GemmaPromptFormatter` (real Gemma turn-template: `<start_of_turn>user/model...<end_of_turn>`)
+- [x] `assistant-core`: `ResponseGenerator` trait (swappable backend) + `EchoResponseGenerator` stub (proves the pipeline ran; not a real reply) + `AssistantCore::process_message` wiring all of the above together
+- [x] `app` runs assistant-core as a background Tokio task subscribed to `UserMessageReceived`, publishing `ResponseGenerated` back
+- [x] `ui` now subscribes to `ResponseGenerated` (via `slint::invoke_from_event_loop`) instead of faking a reply locally -- the deferred Phase 2 item is now done
+- [x] All 5 new crates: 26/26 tests passing across the whole non-UI workspace, verified in this sandbox
+- [ ] **Not done:** planning, tool calls, memory retrieval -- Assistant Core's `process_message` is intentionally linear (append -> context -> prompt -> generate -> append) until Phases 5-7 exist

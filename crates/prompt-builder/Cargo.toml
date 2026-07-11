@@ -1,0 +1,9 @@
+[package]
+name = "prompt-builder"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Formats conversation history into the exact string sent to the model, per model family (Mms SS4, SS8 Prompt Pipeline)."
+
+[dependencies]
+conversation = { workspace = true }

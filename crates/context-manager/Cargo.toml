@@ -1,0 +1,9 @@
+[package]
+name = "context-manager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Keeps conversation history within a budget for prompt building (Ai_reasoning SS8 Context Builder)."
+
+[dependencies]
+conversation = { workspace = true }

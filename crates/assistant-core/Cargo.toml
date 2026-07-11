@@ -1,0 +1,13 @@
+[package]
+name = "assistant-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Orchestrates conversation, context, prompt building, and response generation (Development_plan Phase 3; Archd Layer 2)."
+
+[dependencies]
+common = { workspace = true }
+conversation = { workspace = true }
+session-manager = { workspace = true }
+context-manager = { workspace = true }
+prompt-builder = { workspace = true }

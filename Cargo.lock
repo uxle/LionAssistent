@@ -239,6 +239,7 @@ checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 name = "app"
 version = "0.1.0"
 dependencies = [
+ "assistant-core",
  "common",
  "config",
  "event-bus",
@@ -290,6 +291,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "516b6b4f0e40d50dcda9365d53964ec74560ad4284da2e7fc97122cd83174516"
 dependencies = [
  "stable_deref_trait",
+]
+
+[[package]]
+name = "assistant-core"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "context-manager",
+ "conversation",
+ "prompt-builder",
+ "session-manager",
 ]
 
 [[package]]
@@ -884,6 +896,21 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "context-manager"
+version = "0.1.0"
+dependencies = [
+ "conversation",
+]
+
+[[package]]
+name = "conversation"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "serde",
 ]
 
 [[package]]
@@ -3807,6 +3834,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "prompt-builder"
+version = "0.1.0"
+dependencies = [
+ "conversation",
+]
+
+[[package]]
 name = "pulldown-cmark"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4344,6 +4378,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
 dependencies = [
  "serde_core",
+]
+
+[[package]]
+name = "session-manager"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "conversation",
 ]
 
 [[package]]
@@ -5207,6 +5249,7 @@ dependencies = [
  "event-bus",
  "slint",
  "slint-build",
+ "tokio",
 ]
 
 [[package]]

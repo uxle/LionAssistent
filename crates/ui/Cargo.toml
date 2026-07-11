@@ -12,4 +12,5 @@ slint-build = "1"
 common = { workspace = true }
 event-bus = { workspace = true }
 chrono = { workspace = true }
+tokio = { workspace = true }
 slint = "1"

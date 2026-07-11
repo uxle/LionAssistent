@@ -6,6 +6,11 @@ members = [
     "crates/config",
     "crates/logger",
     "crates/event-bus",
+    "crates/conversation",
+    "crates/session-manager",
+    "crates/context-manager",
+    "crates/prompt-builder",
+    "crates/assistant-core",
     "crates/ui",
     "crates/app",
 ]
@@ -25,6 +30,11 @@ config = { path = "crates/config" }
 logger = { path = "crates/logger" }
 event-bus = { path = "crates/event-bus" }
 ui = { path = "crates/ui" }
+conversation = { path = "crates/conversation" }
+session-manager = { path = "crates/session-manager" }
+context-manager = { path = "crates/context-manager" }
+prompt-builder = { path = "crates/prompt-builder" }
+assistant-core = { path = "crates/assistant-core" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
