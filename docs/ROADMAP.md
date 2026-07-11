@@ -9,6 +9,7 @@ actually exists versus what's still planned.
 | 1 | Foundation | 🟢 Done -- workspace, `common`, `config`, `logger`, `event-bus`, `app` stub. CI/build scripts done. Fully verified (build+test+run) in-sandbox. |
 | 2 | UI Framework (Slint) | 🟡 Written, NOT compile-verified in this sandbox -- see note below. Main window, theme (dark/light), sidebar nav, chat bubbles, composer done. |
 | 3 | Assistant Core | 🟢 Done and fully verified -- conversation, session-manager, context-manager, prompt-builder, assistant-core all build+test clean in this sandbox (no Slint dependency). Stub response generator only; real LLM is Phase 4. |
+| 4 | LLM Runtime | 🟡 Written, NOT compile-verified in this sandbox -- Candle itself hard-requires rustc 1.88+. `model-registry` (metadata, no ML deps) is fully verified. See note below. |
 | 4 | LLM Runtime | ⬜ Not started |
 | 5 | Memory | ⬜ Not started |
 | 6 | Planner & Reasoning | ⬜ Not started |
@@ -86,3 +87,48 @@ still works fine in this sandbox and is unaffected by any of this.
 - [x] `ui` now subscribes to `ResponseGenerated` (via `slint::invoke_from_event_loop`) instead of faking a reply locally -- the deferred Phase 2 item is now done
 - [x] All 5 new crates: 26/26 tests passing across the whole non-UI workspace, verified in this sandbox
 - [ ] **Not done:** planning, tool calls, memory retrieval -- Assistant Core's `process_message` is intentionally linear (append -> context -> prompt -> generate -> append) until Phases 5-7 exist
+
+## Phase 4 checklist
+
+- [x] `model-registry`: `ModelInfo`, `ModelRegistry` -- filesystem-based discovery (`{name}.gguf` + `{name}.tokenizer.json`). Zero ML dependencies; fully verified (3/3 tests).
+- [x] `llm-runtime`: `CandleGemmaBackend` implementing `assistant_core::ResponseGenerator` via [Candle](https://github.com/huggingface/candle)'s real `quantized_gemma3::ModelWeights` (GGUF loading, forward pass, KV-cache position tracking, `LogitsProcessor` sampling, tokenizer encode/decode).
+- [x] `assistant-core`'s `ResponseGenerator::generate` changed from `&self` to `&mut self` -- a real backend needs mutable KV-cache state; `EchoResponseGenerator` and tests updated to match, still 4/4 passing.
+- [x] `app` tries `model-registry` discovery first; loads `CandleGemmaBackend` if both model files are found, falls back to `EchoResponseGenerator` with a logged warning otherwise -- the fallback path itself doesn't need real weights and is straightforward to reason about, though it's exercised through `app`, which can't compile here either (see below).
+- [ ] **Not done:** streaming generation (`generate_stream`) -- current `generate` returns the full reply at once; streaming is a reasonable next increment once this is verified against a real model
+- [ ] **Not done:** GPU/backend auto-selection (Mms SS13) -- hardcoded to `Device::Cpu`, appropriate for a 1B model as a first cut
+
+### ⚠️ Toolchain note: llm-runtime could not be compiled here
+
+Two separate, unrelated blockers stacked up for Phase 4:
+
+1. **This sandbox can't reach Hugging Face or any model host** (only
+   crates.io/npm/PyPI/GitHub/Ubuntu are reachable), so no Gemma 3 GGUF
+   weights or tokenizer could be downloaded here regardless of code
+   quality. True Gemma integration testing needs a real machine.
+2. **Candle itself needs a newer Rust than this sandbox has.**
+   `candle-core` 0.11's dependency on `zip = "^8.6.0"` requires rustc
+   1.88+ -- and unlike Phase 1/2's issues, this isn't an open-ended range
+   that resolves to something too new by accident; it's Candle's own
+   direct, non-negotiable requirement. Older `candle-core` releases (up
+   through 0.9.x) use `zip ^1.1.1` instead and would parse fine under
+   1.75, but it's unconfirmed whether they include the `quantized_gemma3`
+   module specifically, so downgrading risked silently losing Gemma 3
+   support for the sake of an in-sandbox green checkmark -- not a good
+   trade. Latest Candle was kept.
+
+Given both blockers, `llm-runtime`'s code was written against Candle's
+**actual current source** (fetched and read directly, not recalled from
+memory -- see the doc comment at the top of `crates/llm-runtime/src/lib.rs`
+for the exact API basis) rather than compiled. `cargo fmt --check` does
+confirm it's syntactically valid Rust. Build it for real on a machine with
+Rust 1.85+ and a Gemma 3 1B GGUF file + tokenizer.json; expect a normal
+edit-compile loop against candle's actual type signatures, not a redesign.
+
+`model-registry`, and everything from Phase 1 and Phase 3, remain fully
+verified and unaffected:
+
+```bash
+cargo build -p common -p utilities -p config -p logger -p event-bus \
+  -p conversation -p session-manager -p context-manager -p prompt-builder \
+  -p assistant-core -p model-registry
+```

@@ -10,11 +10,11 @@ Reasoning, Developer Implementation Guide, UI/UX, Plugin SDK, Model Runtime,
 Roadmap) live in the project's planning documents. `docs/ROADMAP.md` tracks
 build status phase by phase.
 
-**Status:** Phase 3 (Assistant Core) done and fully verified. Phase 2 (UI)
-is written but not compile-verified in the sandbox this was built in --
-see `docs/ROADMAP.md` for exactly why and what to do about it. No real LLM
-yet (Phase 4) -- assistant-core runs on a stub backend that proves the
-pipeline works without faking a real reply.
+**Status:** Phase 4 (LLM Runtime) written. Phases 1 and 3 are fully
+verified (build+test+run). Phases 2 (UI) and 4 (LLM runtime) are written
+but not compile-verified in the sandbox this was built in -- see
+`docs/ROADMAP.md` for exactly why (two unrelated toolchain/network limits,
+not code problems) and what to do about it.
 
 ## Workspace layout
 
@@ -30,15 +30,17 @@ crates/
   context-manager/  keeps history within a character budget
   prompt-builder/   formats history into a model-specific prompt (Gemma template)
   assistant-core/   orchestrates the above behind a swappable ResponseGenerator
+  model-registry/   filesystem-based discovery of installed models (no ML deps)
+  llm-runtime/      Candle-based Gemma 3 GGUF backend (real API, unverified build)
   ui/               Slint desktop shell: theme, sidebar, chat view, composer
   app/              binary entry point (bin name: ai-assistant)
 config/
   default.toml default configuration loaded at startup
 ```
 
-Later phases add `llm-runtime`, `memory`, `tool-framework`,
-`permission-manager`, `linux-services`, `plugin-manager`, and more, per the
-full project structure.
+Later phases add `memory`, `tool-framework`, `permission-manager`,
+`linux-services`, `plugin-manager`, and more, per the full project
+structure.
 
 ## Building
 
@@ -55,15 +57,24 @@ cargo test --workspace
 cargo run -p app
 ```
 
-Phase 1 and Phase 3 together (no Slint) are fully verified and work even
-on old toolchains:
+Phase 1 and Phase 3 together (no Slint, no Candle) are fully verified and
+work even on old toolchains:
 
 ```bash
 cargo build -p common -p utilities -p config -p logger -p event-bus \
-  -p conversation -p session-manager -p context-manager -p prompt-builder -p assistant-core
+  -p conversation -p session-manager -p context-manager -p prompt-builder \
+  -p assistant-core -p model-registry
 cargo test -p common -p utilities -p config -p logger -p event-bus \
-  -p conversation -p session-manager -p context-manager -p prompt-builder -p assistant-core
+  -p conversation -p session-manager -p context-manager -p prompt-builder \
+  -p assistant-core -p model-registry
 ```
+
+To use a real model once you're building `llm-runtime`/`app` on a modern
+toolchain: download a Gemma 3 1B GGUF file and its `tokenizer.json`, name
+them `gemma-3-1b.gguf` and `gemma-3-1b.tokenizer.json`, and put both in
+`models/gemma/` (or wherever `config.model.model_path` points). `app`
+picks them up automatically; without them it falls back to a stub backend
+with a logged warning rather than failing.
 
 ## Development
 

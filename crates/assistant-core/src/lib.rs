@@ -17,9 +17,10 @@ use session_manager::{Session, SessionManager};
 
 /// The thing that turns a finished prompt into a reply. Phase 4
 /// implements this against a real local model; `EchoResponseGenerator`
-/// below is a stand-in until then.
+/// below is a stand-in until then. `&mut self` because a real backend
+/// carries mutable state between calls (KV cache).
 pub trait ResponseGenerator: Send + Sync {
-    fn generate(&self, prompt: &str) -> String;
+    fn generate(&mut self, prompt: &str) -> String;
 }
 
 /// Stub backend: proves the pipeline ran (built a real prompt of a real
@@ -29,7 +30,7 @@ pub trait ResponseGenerator: Send + Sync {
 pub struct EchoResponseGenerator;
 
 impl ResponseGenerator for EchoResponseGenerator {
-    fn generate(&self, prompt: &str) -> String {
+    fn generate(&mut self, prompt: &str) -> String {
         format!(
             "[stub reply -- llm-runtime lands in Phase 4] pipeline OK: built a {}-character prompt from the conversation so far.",
             prompt.chars().count()
@@ -103,7 +104,7 @@ mod tests {
 
     struct FixedReply(&'static str);
     impl ResponseGenerator for FixedReply {
-        fn generate(&self, _prompt: &str) -> String {
+        fn generate(&mut self, _prompt: &str) -> String {
             self.0.to_string()
         }
     }

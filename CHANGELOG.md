@@ -6,6 +6,14 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 4)
+
+- `model-registry` crate: `ModelInfo`, `ModelRegistry` -- filesystem-based model discovery, zero ML dependencies, fully verified (3/3 tests).
+- `llm-runtime` crate: `CandleGemmaBackend`, a real `assistant_core::ResponseGenerator` built on Candle's `quantized_gemma3::ModelWeights` (GGUF loading, forward pass, sampling, tokenizer). API verified against Candle's actual current source; not compiled (candle-core 0.11 requires rustc 1.88+, unrelated to and deeper than Phase 1/2's issues).
+- `assistant-core`'s `ResponseGenerator::generate` changed from `&self` to `&mut self` for real backend KV-cache state; `EchoResponseGenerator` and tests updated, still 4/4 passing.
+- `app` now discovers and loads a real model automatically if present, falling back to the Phase 3 stub with a logged warning otherwise.
+- 29/29 tests passing across all 11 non-Slint, non-Candle crates.
+
 ### Added (Phase 3)
 
 - `conversation` crate: `Role`, `Message`, `Conversation`.

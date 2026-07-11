@@ -11,6 +11,8 @@ members = [
     "crates/context-manager",
     "crates/prompt-builder",
     "crates/assistant-core",
+    "crates/model-registry",
+    "crates/llm-runtime",
     "crates/ui",
     "crates/app",
 ]
@@ -35,6 +37,8 @@ session-manager = { path = "crates/session-manager" }
 context-manager = { path = "crates/context-manager" }
 prompt-builder = { path = "crates/prompt-builder" }
 assistant-core = { path = "crates/assistant-core" }
+model-registry = { path = "crates/model-registry" }
+llm-runtime = { path = "crates/llm-runtime" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

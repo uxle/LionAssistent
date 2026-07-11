@@ -1,0 +1,17 @@
+[package]
+name = "llm-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Candle-based local inference backend for Gemma 3 GGUF models (Development_plan Phase 4; Mms SS5 Inference Backends)."
+
+[dependencies]
+common = { workspace = true }
+assistant-core = { workspace = true }
+model-registry = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+candle-core = "0.11"
+candle-transformers = "0.11"
+candle-nn = "0.11"
+tokenizers = "0.23"
