@@ -6,6 +6,7 @@ members = [
     "crates/config",
     "crates/logger",
     "crates/event-bus",
+    "crates/ui",
     "crates/app",
 ]
 
@@ -23,6 +24,7 @@ utilities = { path = "crates/utilities" }
 config = { path = "crates/config" }
 logger = { path = "crates/logger" }
 event-bus = { path = "crates/event-bus" }
+ui = { path = "crates/ui" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

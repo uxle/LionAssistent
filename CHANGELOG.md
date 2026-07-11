@@ -6,7 +6,13 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
-### Added
+### Added (Phase 2)
+
+- `ui` crate: `theme.slint` (Palette global, dark/light design tokens), `app-window.slint` (header with theme toggle, sidebar nav, chat bubbles styled per role, composer).
+- `ui::run(EventBus)`: composer publishes `Event::UserMessageReceived`; placeholder assistant reply appended locally pending Phase 3.
+- `app` binary now launches the UI; `main` switched from `#[tokio::main]` to sync + an explicitly-entered runtime, since native GUI backends need the real OS main thread.
+
+### Added (Phase 1)
 
 - Phase 1 foundation: Cargo workspace with shared `[workspace.dependencies]`.
 - `common` crate: `AppError` / `AppResult`, `Id`, `Timestamp`, `PermissionLevel`.

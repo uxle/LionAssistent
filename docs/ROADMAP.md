@@ -6,8 +6,8 @@ actually exists versus what's still planned.
 
 | Phase | Name | Status |
 |---|---|---|
-| 1 | Foundation | 🟡 In progress -- workspace, `common`, `config`, `logger`, `event-bus`, `app` stub done. CI/build scripts done. |
-| 2 | UI Framework (Slint) | ⬜ Not started |
+| 1 | Foundation | 🟢 Done -- workspace, `common`, `config`, `logger`, `event-bus`, `app` stub. CI/build scripts done. Fully verified (build+test+run) in-sandbox. |
+| 2 | UI Framework (Slint) | 🟡 Written, NOT compile-verified in this sandbox -- see note below. Main window, theme (dark/light), sidebar nav, chat bubbles, composer done. |
 | 3 | Assistant Core | ⬜ Not started |
 | 4 | LLM Runtime | ⬜ Not started |
 | 5 | Memory | ⬜ Not started |
@@ -44,3 +44,33 @@ Developer Platform, LionOS integration) are post-v1.0 and not tracked here yet.
 - [x] CI workflow (fmt, clippy, test, build)
 - [ ] `utilities` crate gets used by real callers (currently only self-tested)
 - [ ] Root `README.md` kept in sync as new crates land
+
+## Phase 2 checklist
+
+- [x] `ui` crate: `theme.slint` (Palette global: dark/light tokens)
+- [x] `app-window.slint`: header + theme toggle, sidebar nav (6 items), scrollable chat bubbles (user/assistant/system styling), composer
+- [x] `ui::run(EventBus)`: composer publishes `Event::UserMessageReceived`; placeholder assistant reply appended locally (clearly labeled, since Phase 3 doesn't exist yet)
+- [x] `app` binary launches the UI; `main` is sync (not `#[tokio::main]`) since native GUI backends need the real OS main thread -- a multi-threaded Tokio runtime is still built and entered for Phase 3+ to spawn background work from UI callbacks
+- [ ] **Not done:** subscribing to `Event::ResponseGenerated` to render a real backend's replies -- deferred to Phase 3, where there's an actual producer to build and test against
+
+### ⚠️ Toolchain note (read before building Phase 2)
+
+This sandbox only has Rust 1.75 via `apt` (rustup's own servers aren't
+reachable from its network allowlist). Slint's dependency tree has moved
+well past what 1.75 can parse -- newest Slint needs rustc 1.77+, and its
+transitive deps (even just to run `slint-build` in `build.rs`) hit crates
+requiring the `edition2024` Cargo feature, which needs rustc 1.85+.
+
+Phase 1's crates (`common`, `utilities`, `config`, `logger`, `event-bus`)
+were verified for real: build, 9/9 tests, and the binary actually running.
+Phase 2's code (`ui`, and `app` since it now depends on `ui`) is written
+carefully and `cargo fmt --check` confirms it's syntactically valid Rust,
+but it could **not** be compiled end-to-end in this sandbox, so the actual
+Slint API calls (property/callback names, model downcasting, etc.) are
+unverified. Build it on a machine with Rust 1.85+ (via
+[rustup](https://rustup.rs)) and fix whatever cargo's error messages turn
+up -- that's a normal, fast edit-compile loop once a real toolchain is
+available, not a redesign.
+
+`cargo build -p common -p utilities -p config -p logger -p event-bus`
+still works fine in this sandbox and is unaffected by any of this.

@@ -1,0 +1,229 @@
+import { Palette } from "theme.slint";
+import { LineEdit, ScrollView } from "std-widgets.slint";
+
+// Chat message model (DBDMS "Messages" table, trimmed to what the UI
+// needs). `role` is "user" | "assistant" | "system".
+export struct ChatMessage {
+    role: string,
+    content: string,
+    time: string,
+}
+
+component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+    callback clicked;
+
+    height: 40px;
+    border-radius: Palette.radius-md;
+    background: active ? Palette.nav-active-bg : transparent;
+
+    TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    HorizontalLayout {
+        padding-left: Palette.space-md;
+        alignment: start;
+        Text {
+            text: root.label;
+            color: active ? Palette.accent : Palette.text-primary;
+            font-weight: active ? 600 : 400;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Primary navigation (UI-UX SS6): Chat, History, Memory, Workflows,
+// Plugins, Settings. Only "Chat" is functional in Phase 2 -- the rest are
+// wired for navigation but land their real content in later phases.
+component Sidebar inherits Rectangle {
+    in-out property <string> selected: "Chat";
+    callback nav-selected(string);
+
+    width: 220px;
+    background: Palette.sidebar-bg;
+
+    VerticalLayout {
+        padding: Palette.space-md;
+        spacing: Palette.space-sm;
+
+        Text {
+            text: "Local AI Assistant";
+            font-size: 16px;
+            font-weight: 700;
+            color: Palette.text-primary;
+        }
+
+        Rectangle { height: Palette.space-md; }
+
+        for item-name in ["Chat", "History", "Memory", "Workflows", "Plugins", "Settings"]: NavItem {
+            label: item-name;
+            active: item-name == root.selected;
+            clicked => {
+                root.selected = item-name;
+                root.nav-selected(item-name);
+            }
+        }
+
+        Rectangle { vertical-stretch: 1; }
+    }
+}
+
+// One chat bubble, styled per role (UI-UX SS8: User / Assistant / System).
+component MessageBubble inherits Rectangle {
+    in property <ChatMessage> message;
+
+    property <bool> is-user: message.role == "user";
+    property <bool> is-system: message.role == "system";
+
+    HorizontalLayout {
+        alignment: is-user ? end : start;
+
+        Rectangle {
+            max-width: 520px;
+            border-radius: Palette.radius-md;
+            background: is-system ? Palette.system-bubble : is-user ? Palette.user-bubble : Palette.assistant-bubble;
+            border-width: is-system ? 0px : 1px;
+            border-color: Palette.border-color;
+
+            VerticalLayout {
+                padding: Palette.space-sm;
+                spacing: 4px;
+
+                Text {
+                    text: message.content;
+                    color: Palette.text-primary;
+                    wrap: word-wrap;
+                    font-italic: is-system;
+                }
+                Text {
+                    text: message.time;
+                    color: Palette.text-secondary;
+                    font-size: 11px;
+                }
+            }
+        }
+    }
+}
+
+component Composer inherits Rectangle {
+    callback send(string);
+
+    height: 64px;
+    background: Palette.surface;
+
+    VerticalLayout {
+        Rectangle {
+            // top divider, sequential rather than overlaid
+            height: 1px;
+            background: Palette.border-color;
+        }
+
+        HorizontalLayout {
+            padding: Palette.space-sm;
+            spacing: Palette.space-sm;
+
+            input := LineEdit {
+                placeholder-text: "Message the assistant...";
+                horizontal-stretch: 1;
+                accepted(text) => {
+                    root.send(text);
+                    self.text = "";
+                }
+            }
+
+            Rectangle {
+                width: 80px;
+                border-radius: Palette.radius-md;
+                background: Palette.accent;
+
+                TouchArea {
+                    clicked => {
+                        root.send(input.text);
+                        input.text = "";
+                    }
+                }
+
+                Text {
+                    text: "Send";
+                    color: white;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "Local Linux AI Assistant";
+    width: 960px;
+    height: 640px;
+    background: Palette.window-bg;
+
+    in-out property <[ChatMessage]> messages: [];
+    callback send-message(string);
+
+    VerticalLayout {
+        // Header
+        Rectangle {
+            height: 52px;
+            background: Palette.surface;
+
+            VerticalLayout {
+                HorizontalLayout {
+                    padding: Palette.space-md;
+                    Text {
+                        text: "Local Linux AI Assistant -- Phase 2";
+                        color: Palette.text-primary;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                        horizontal-stretch: 1;
+                    }
+                    Rectangle {
+                        width: 100px;
+                        border-radius: Palette.radius-md;
+                        border-width: 1px;
+                        border-color: Palette.border-color;
+                        TouchArea {
+                            clicked => { Palette.dark = !Palette.dark; }
+                        }
+                        Text {
+                            text: Palette.dark ? "Light mode" : "Dark mode";
+                            color: Palette.text-primary;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+                Rectangle {
+                    // bottom divider, sequential rather than overlaid
+                    height: 1px;
+                    background: Palette.border-color;
+                }
+            }
+        }
+
+        HorizontalLayout {
+            Sidebar { }
+
+            VerticalLayout {
+                ScrollView {
+                    vertical-stretch: 1;
+                    VerticalLayout {
+                        padding: Palette.space-md;
+                        spacing: Palette.space-sm;
+                        for msg in root.messages: MessageBubble {
+                            message: msg;
+                        }
+                    }
+                }
+
+                Composer {
+                    send(text) => { root.send-message(text); }
+                }
+            }
+        }
+    }
+}

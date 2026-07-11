@@ -1,40 +1,40 @@
-//! `app` -- binary entry point tying together the Phase 1 foundation
-//! crates: `common`, `config`, `logger`, and `event-bus`
-//! (Development_plan Phase 1).
+//! `app` -- binary entry point. Phase 1 gave us `common`, `config`,
+//! `logger`, and `event-bus`; Phase 2 adds the Slint UI shell (`ui`),
+//! which now owns the process's main loop.
 //!
-//! This binary does not yet include the Slint UI (Phase 2), the assistant
-//! core (Phase 3), or the LLM runtime (Phase 4). It exists to prove that
-//! the foundation compiles, wires together, and runs end-to-end before any
-//! of that is built on top of it.
+//! `main` is deliberately synchronous, not `#[tokio::main]`: native GUI
+//! backends need the real OS main thread, and Slint's `run()` blocks it
+//! until the window closes. A multi-threaded Tokio runtime is still built
+//! up front and entered so later phases (LLM inference, async tool
+//! execution) can spawn background work from inside UI callbacks via
+//! `tokio::spawn`, without the UI thread itself ever needing to be async.
 
-use common::AppResult;
+use common::{AppError, AppResult};
 use config::Config;
-use event_bus::{Event, EventBus};
+use event_bus::EventBus;
 
-#[tokio::main]
-async fn main() -> AppResult<()> {
+fn main() -> AppResult<()> {
     let config = Config::load("config/default.toml")?;
     logger::init(&config.logging_level);
 
     tracing::info!(
         model = %config.model.active_model,
         theme = %config.ui.theme,
-        "starting Local Linux AI Assistant (Phase 1 foundation)"
+        "starting Local Linux AI Assistant (Phase 2: UI shell)"
     );
+
+    // Background async runtime for future phases; entered but not yet
+    // driving anything of our own since nothing in Phase 1/2 needs it.
+    let runtime = tokio::runtime::Runtime::new()?;
+    let _guard = runtime.enter();
 
     let bus = EventBus::default();
-    let mut events = bus.subscribe();
 
-    bus.publish(Event::ApplicationStarted);
-    if let Ok(event) = events.try_recv() {
-        tracing::info!(?event, "event received");
-    }
+    ui::run(bus).map_err(|e| AppError::Module {
+        module: "ui",
+        message: e.to_string(),
+    })?;
 
-    tracing::info!(
-        "Phase 1 foundation is alive: config, logger, and event bus are wired together."
-    );
-
-    bus.publish(Event::ApplicationStopped);
-
+    tracing::info!("UI closed, shutting down");
     Ok(())
 }
