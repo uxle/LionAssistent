@@ -1,0 +1,11 @@
+[package]
+name = "embeddings"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Text-to-vector embedding, behind a swappable trait (Archd SS3 Replaceable AI backend; DBDMS SS3 Embeddings table)."
+
+[dependencies]
+
+[dev-dependencies]
+vector-db = { workspace = true }

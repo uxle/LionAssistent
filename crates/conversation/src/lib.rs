@@ -23,6 +23,34 @@ impl Role {
     }
 }
 
+/// Returned by `Role`'s [`FromStr`](std::str::FromStr) impl for anything
+/// that isn't one of the four known role strings (e.g. corrupt or
+/// hand-edited storage).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseRoleError(String);
+
+impl std::fmt::Display for ParseRoleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unknown role: {:?}", self.0)
+    }
+}
+
+impl std::error::Error for ParseRoleError {}
+
+impl std::str::FromStr for Role {
+    type Err = ParseRoleError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "user" => Ok(Role::User),
+            "assistant" => Ok(Role::Assistant),
+            "system" => Ok(Role::System),
+            "tool" => Ok(Role::Tool),
+            other => Err(ParseRoleError(other.to_string())),
+        }
+    }
+}
+
 /// One chat message (DBDMS SS3 Messages: id, session_id, role, content,
 /// token_count, timestamp -- `session_id` lives on `Session` in
 /// `session-manager` rather than here, since a `Conversation` is already
@@ -109,5 +137,18 @@ mod tests {
     #[test]
     fn empty_conversation_has_no_last_user_message() {
         assert!(Conversation::new().last_user_message().is_none());
+    }
+
+    #[test]
+    fn role_round_trips_through_str_and_parse() {
+        for role in [Role::User, Role::Assistant, Role::System, Role::Tool] {
+            let parsed: Role = role.as_str().parse().unwrap();
+            assert_eq!(role, parsed);
+        }
+    }
+
+    #[test]
+    fn unknown_role_string_is_an_error() {
+        assert!("not-a-role".parse::<Role>().is_err());
     }
 }

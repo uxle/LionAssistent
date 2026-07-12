@@ -17,6 +17,8 @@ event-bus = { workspace = true }
 assistant-core = { workspace = true }
 model-registry = { workspace = true }
 llm-runtime = { workspace = true }
+memory = { workspace = true }
+embeddings = { workspace = true }
 ui = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

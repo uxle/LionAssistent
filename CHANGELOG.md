@@ -6,6 +6,15 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 5)
+
+- `vector-db` crate: `VectorIndex<Id>`, brute-force cosine similarity search. Zero dependencies, 8/8 tests.
+- `embeddings` crate: `Embedder` trait + `HashingEmbedder` (dependency-free character-trigram feature hashing). 5/5 tests.
+- `memory` crate: `MemoryStore` on SQLite (`rusqlite`, bundled). Session/message persistence, long-term memory (`remember`/`forget`/`search_memory`), extractive summarization. 9/9 tests.
+- `common::Id` and `conversation::Role` gained `FromStr` impls for round-tripping through storage.
+- `app` now persists every processed turn to `data/database/assistant.db` immediately after assistant-core replies.
+- 54/54 tests passing across all 14 non-Slint, non-Candle crates. One real bug (foreign-key delete ordering in `forget()`) caught and fixed by the test suite during this phase.
+
 ### Added (Phase 4)
 
 - `model-registry` crate: `ModelInfo`, `ModelRegistry` -- filesystem-based model discovery, zero ML dependencies, fully verified (3/3 tests).

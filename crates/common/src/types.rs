@@ -24,6 +24,14 @@ impl std::fmt::Display for Id {
     }
 }
 
+impl std::str::FromStr for Id {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(uuid::Uuid::parse_str(s)?))
+    }
+}
+
 /// UTC timestamp used throughout the assistant: chat messages, logs, tool
 /// executions, and audit records (DBDMS SS3, TCLIS SS9 audit logging).
 pub type Timestamp = chrono::DateTime<chrono::Utc>;
@@ -63,5 +71,12 @@ mod tests {
     #[test]
     fn ids_are_unique() {
         assert_ne!(Id::new(), Id::new());
+    }
+
+    #[test]
+    fn id_round_trips_through_display_and_parse() {
+        let id = Id::new();
+        let parsed: Id = id.to_string().parse().unwrap();
+        assert_eq!(id, parsed);
     }
 }

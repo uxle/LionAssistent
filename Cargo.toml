@@ -13,6 +13,9 @@ members = [
     "crates/assistant-core",
     "crates/model-registry",
     "crates/llm-runtime",
+    "crates/vector-db",
+    "crates/embeddings",
+    "crates/memory",
     "crates/ui",
     "crates/app",
 ]
@@ -39,6 +42,9 @@ prompt-builder = { path = "crates/prompt-builder" }
 assistant-core = { path = "crates/assistant-core" }
 model-registry = { path = "crates/model-registry" }
 llm-runtime = { path = "crates/llm-runtime" }
+vector-db = { path = "crates/vector-db" }
+embeddings = { path = "crates/embeddings" }
+memory = { path = "crates/memory" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

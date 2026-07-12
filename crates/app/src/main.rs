@@ -1,8 +1,9 @@
 //! `app` -- binary entry point. Phase 1 gave us `common`, `config`,
 //! `logger`, and `event-bus`; Phase 2 added the Slint UI shell (`ui`);
-//! Phase 3 added `assistant-core`; Phase 4 adds a real local model
-//! (`llm-runtime`, via `model-registry`), used automatically when found
-//! and falling back to the Phase 3 stub with a clear log message when not.
+//! Phase 3 added `assistant-core`; Phase 4 added a real local model
+//! (`llm-runtime`, via `model-registry`); Phase 5 adds persistence
+//! (`memory`) -- every processed message is saved to SQLite as it
+//! happens, so conversation history survives a restart.
 //!
 //! `main` is deliberately synchronous, not `#[tokio::main]`: native GUI
 //! backends need the real OS main thread, and Slint's `run()` blocks it
@@ -13,7 +14,9 @@
 use assistant_core::{AssistantCore, EchoResponseGenerator, ResponseGenerator};
 use common::{AppError, AppResult};
 use config::Config;
+use embeddings::HashingEmbedder;
 use event_bus::{Event, EventBus};
+use memory::MemoryStore;
 use model_registry::ModelRegistry;
 use std::path::Path;
 
@@ -60,6 +63,14 @@ fn load_backend(config: &Config) -> Box<dyn ResponseGenerator> {
     }
 }
 
+fn open_memory() -> AppResult<MemoryStore> {
+    let db_path = Path::new("data/database/assistant.db");
+    if let Some(dir) = db_path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    MemoryStore::open(db_path, Box::new(HashingEmbedder::default()))
+}
+
 fn main() -> AppResult<()> {
     let config = Config::load("config/default.toml")?;
     logger::init(&config.logging_level);
@@ -67,7 +78,7 @@ fn main() -> AppResult<()> {
     tracing::info!(
         model = %config.model.active_model,
         theme = %config.ui.theme,
-        "starting Local Linux AI Assistant (Phase 4: LLM runtime)"
+        "starting Local Linux AI Assistant (Phase 5: persistent memory)"
     );
 
     let runtime = tokio::runtime::Runtime::new()?;
@@ -79,9 +90,16 @@ fn main() -> AppResult<()> {
     let mut assistant = AssistantCore::new(backend);
     let session_id = assistant.create_session(&config.model.active_model);
 
+    let memory_store = open_memory()?;
+    tracing::info!(
+        sessions = memory_store.list_sessions()?.len(),
+        "opened persistent memory at data/database/assistant.db"
+    );
+
     // Background task: assistant-core answers whatever arrives on the
-    // bus. `assistant` moves in whole -- nothing else needs it, so no
-    // Arc<Mutex<_>> required.
+    // bus, and every processed turn is immediately persisted. `assistant`
+    // and `memory_store` both move in whole -- nothing else needs them,
+    // so no Arc<Mutex<_>> required.
     {
         let mut events = bus.subscribe();
         let reply_bus = bus.clone();
@@ -96,6 +114,11 @@ fn main() -> AppResult<()> {
                 };
                 match assistant.process_message(session_id, content) {
                     Ok(reply) => {
+                        if let Some(session) = assistant.session(session_id) {
+                            if let Err(e) = memory_store.save_session(session) {
+                                tracing::warn!(error = %e, "failed to persist session");
+                            }
+                        }
                         reply_bus.publish(Event::ResponseGenerated {
                             session_id,
                             content: reply,

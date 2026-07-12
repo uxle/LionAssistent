@@ -10,6 +10,7 @@ actually exists versus what's still planned.
 | 2 | UI Framework (Slint) | 🟡 Written, NOT compile-verified in this sandbox -- see note below. Main window, theme (dark/light), sidebar nav, chat bubbles, composer done. |
 | 3 | Assistant Core | 🟢 Done and fully verified -- conversation, session-manager, context-manager, prompt-builder, assistant-core all build+test clean in this sandbox (no Slint dependency). Stub response generator only; real LLM is Phase 4. |
 | 4 | LLM Runtime | 🟡 Written, NOT compile-verified in this sandbox -- Candle itself hard-requires rustc 1.88+. `model-registry` (metadata, no ML deps) is fully verified. See note below. |
+| 5 | Memory | 🟢 Done and fully verified -- `vector-db`, `embeddings`, `memory` all build+test clean in this sandbox (no Slint/Candle dependency). SQLite via `rusqlite` (bundled), real cosine-similarity search, real (non-neural) embeddings. |
 | 4 | LLM Runtime | ⬜ Not started |
 | 5 | Memory | ⬜ Not started |
 | 6 | Planner & Reasoning | ⬜ Not started |
@@ -132,3 +133,24 @@ cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry
 ```
+
+## Phase 5 checklist
+
+- [x] `vector-db`: `VectorIndex<Id>`, brute-force cosine similarity search -- appropriate at local single-user scale (hundreds to low-thousands of memories, not millions). Zero dependencies. 8/8 tests.
+- [x] `embeddings`: `Embedder` trait + `HashingEmbedder` (character-trigram feature hashing -- real, deterministic, dependency-free; captures lexical overlap, not deep semantic meaning). A neural embedder can implement the same trait later, once Phase 4's toolchain constraint is resolved on a real machine. 5/5 tests.
+- [x] `memory`: `MemoryStore` on SQLite (`rusqlite`, bundled -- no system libsqlite3 needed). Sessions/messages persistence (idempotent re-saves), long-term memories (`remember`/`forget`/`search_memory`/`list_memories`), extractive session summarization. 9/9 tests, including a real bug caught and fixed during this phase (see below).
+- [x] `common::Id` and `conversation::Role` gained `FromStr` impls so `memory` can parse them back out of SQLite without every downstream crate needing its own `uuid`/string-matching logic.
+- [x] `app` now opens `data/database/assistant.db` at startup and persists every processed turn immediately after `assistant-core` replies.
+- [x] 54/54 tests passing across all 14 non-Slint, non-Candle crates.
+- [ ] **Not done:** abstractive (model-generated) summarization -- current `summarize_session` is extractive (keeps head/tail messages verbatim); a real summary needs a working `llm-runtime`, Phase 4's own unresolved constraint
+- [ ] **Not done:** UI-level "resume last session" -- data persists correctly, but `app` still always starts a fresh session; wiring the UI to offer resuming is a reasonable follow-up, not attempted here to avoid over-scoping this phase
+
+### A bug this phase's tests actually caught
+
+`forget()` originally deleted the `memories` row before the `embeddings`
+row that references it via a `FOREIGN KEY`, which SQLite correctly
+rejected. Wrong order, caught immediately by
+`remembers_and_forgets_long_term_memories` failing, fixed by deleting the
+child row first. This is exactly why these crates are built with tests
+alongside them rather than after the fact -- worth calling out as a
+concrete example, not just an abstract claim of "verified."

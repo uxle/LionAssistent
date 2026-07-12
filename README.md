@@ -10,9 +10,9 @@ Reasoning, Developer Implementation Guide, UI/UX, Plugin SDK, Model Runtime,
 Roadmap) live in the project's planning documents. `docs/ROADMAP.md` tracks
 build status phase by phase.
 
-**Status:** Phase 4 (LLM Runtime) written. Phases 1 and 3 are fully
-verified (build+test+run). Phases 2 (UI) and 4 (LLM runtime) are written
-but not compile-verified in the sandbox this was built in -- see
+**Status:** Phase 5 (Memory) done and fully verified. Phases 1, 3, and 5
+are fully verified (build+test+run). Phases 2 (UI) and 4 (LLM runtime) are
+written but not compile-verified in the sandbox this was built in -- see
 `docs/ROADMAP.md` for exactly why (two unrelated toolchain/network limits,
 not code problems) and what to do about it.
 
@@ -32,15 +32,20 @@ crates/
   assistant-core/   orchestrates the above behind a swappable ResponseGenerator
   model-registry/   filesystem-based discovery of installed models (no ML deps)
   llm-runtime/      Candle-based Gemma 3 GGUF backend (real API, unverified build)
+  vector-db/        brute-force cosine-similarity vector search
+  embeddings/       text-to-vector embedding behind a swappable trait
+  memory/           SQLite-backed session persistence + long-term memory + search
   ui/               Slint desktop shell: theme, sidebar, chat view, composer
   app/              binary entry point (bin name: ai-assistant)
 config/
   default.toml default configuration loaded at startup
+data/
+  database/    assistant.db (SQLite, created on first run, gitignored)
 ```
 
-Later phases add `memory`, `tool-framework`, `permission-manager`,
-`linux-services`, `plugin-manager`, and more, per the full project
-structure.
+Later phases add `planner`, `reasoning`, `tool-framework`,
+`permission-manager`, `linux-services`, `plugin-manager`, and more, per the
+full project structure.
 
 ## Building
 
@@ -57,16 +62,16 @@ cargo test --workspace
 cargo run -p app
 ```
 
-Phase 1 and Phase 3 together (no Slint, no Candle) are fully verified and
+Phase 1, 3, and 5 together (no Slint, no Candle) are fully verified and
 work even on old toolchains:
 
 ```bash
 cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
-  -p assistant-core -p model-registry
+  -p assistant-core -p model-registry -p vector-db -p embeddings -p memory
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
-  -p assistant-core -p model-registry
+  -p assistant-core -p model-registry -p vector-db -p embeddings -p memory
 ```
 
 To use a real model once you're building `llm-runtime`/`app` on a modern
