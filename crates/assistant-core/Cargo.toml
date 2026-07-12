@@ -11,3 +11,6 @@ conversation = { workspace = true }
 session-manager = { workspace = true }
 context-manager = { workspace = true }
 prompt-builder = { workspace = true }
+reasoning = { workspace = true }
+planner = { workspace = true }
+tracing = { workspace = true }

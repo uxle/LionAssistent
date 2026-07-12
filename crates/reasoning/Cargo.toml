@@ -1,0 +1,8 @@
+[package]
+name = "reasoning"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Intent and reasoning-level classification (Ai_reasoning SS5 Reasoning Levels, SS6 Intent Classification)."
+
+[dependencies]

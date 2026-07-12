@@ -6,6 +6,13 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 6)
+
+- `reasoning` crate: `Intent`, `ReasoningLevel`, `IntentClassifier` trait + `KeywordClassifier` (dependency-free rule-based classifier, correctly handles all five of Ai_reasoning's own canonical examples). 11/11 tests.
+- `planner` crate: `Plan`/`PlanStep` with real dependency-graph validation, cycle detection, and topological execution order (Kahn's algorithm). `Planner::create_plan` is honest about not fabricating multi-step breakdowns without a Tool Framework to ground them in. 11/11 tests.
+- `assistant-core` now classifies every message and folds intent/reasoning-level into the system prompt actually sent to the generator, proven by a prompt-capturing test.
+- 77/77 tests passing across all 16 non-Slint, non-Candle crates.
+
 ### Added (Phase 5)
 
 - `vector-db` crate: `VectorIndex<Id>`, brute-force cosine similarity search. Zero dependencies, 8/8 tests.

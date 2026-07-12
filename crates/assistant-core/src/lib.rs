@@ -1,6 +1,7 @@
 //! `assistant-core` -- the brain of the application (Archd Layer 2). Ties
-//! together session management, context building, and prompt formatting,
-//! then hands the finished prompt to a [`ResponseGenerator`].
+//! together session management, context building, prompt formatting, and
+//! (as of Phase 6) intent/reasoning-level classification, then hands the
+//! finished prompt to a [`ResponseGenerator`].
 //!
 //! There is no real LLM behind [`ResponseGenerator`] yet -- that's Phase
 //! 4's `llm-runtime`. [`EchoResponseGenerator`] proves the pipeline
@@ -8,11 +9,20 @@
 //! without pretending to be a real reply. Phase 4 implements the same
 //! trait against Gemma/llama.cpp; nothing here needs to change when it
 //! does (Archd SS3 "Replaceable AI backend").
+//!
+//! Phase 6 adds classification (`reasoning`) and planning (`planner`),
+//! wired into `process_message` so the detected intent and reasoning
+//! level genuinely reach the prompt -- but `process_message` itself
+//! stays linear (append -> context -> prompt -> generate -> append)
+//! rather than branching on the plan, since there's no Tool Framework
+//! (Phase 7) yet for a plan to actually drive.
 
 use common::{AppError, AppResult, Id};
 use context_manager::ContextBuilder;
 use conversation::{Message, Role};
+use planner::Planner;
 use prompt_builder::{GemmaPromptFormatter, PromptFormatter};
+use reasoning::KeywordClassifier;
 use session_manager::{Session, SessionManager};
 
 /// The thing that turns a finished prompt into a reply. Phase 4
@@ -43,6 +53,7 @@ pub struct AssistantCore {
     formatter: GemmaPromptFormatter,
     context_builder: ContextBuilder,
     generator: Box<dyn ResponseGenerator>,
+    planner: Planner,
     system_prompt: String,
 }
 
@@ -53,6 +64,7 @@ impl AssistantCore {
             formatter: GemmaPromptFormatter,
             context_builder: ContextBuilder::default(),
             generator,
+            planner: Planner::new(Box::new(KeywordClassifier)),
             system_prompt:
                 "You are a helpful local AI assistant running on the user's Linux desktop."
                     .to_string(),
@@ -67,17 +79,26 @@ impl AssistantCore {
         self.sessions.get(id)
     }
 
-    /// Processes one user message end to end: append it, build context,
-    /// build the prompt, generate a reply, append the reply, return the
-    /// reply's text (TDS SS2 `process_request`; Apis SS3
-    /// `process_message`).
+    /// Processes one user message end to end: classify it, append it,
+    /// build context, build the prompt (informed by the classification),
+    /// generate a reply, append the reply, return the reply's text (TDS
+    /// SS2 `process_request`; Apis SS3 `process_message`).
     pub fn process_message(
         &mut self,
         session_id: Id,
         user_input: impl Into<String>,
     ) -> AppResult<String> {
+        let user_input = user_input.into();
+        let classification = self.planner.classify(&user_input);
+        tracing::debug!(
+            intent = ?classification.intent,
+            level = ?classification.level,
+            confidence = classification.confidence,
+            "classified user request"
+        );
+
         self.sessions
-            .append_message(session_id, Message::new(Role::User, user_input.into()))?;
+            .append_message(session_id, Message::new(Role::User, user_input))?;
 
         let session = self
             .sessions
@@ -88,7 +109,11 @@ impl AssistantCore {
             })?;
 
         let selected = self.context_builder.select(session.conversation.messages());
-        let prompt = self.formatter.format(&self.system_prompt, &selected);
+        let system_prompt = format!(
+            "{}\n\n(Detected intent: {:?}, reasoning level: {:?}.)",
+            self.system_prompt, classification.intent, classification.level
+        );
+        let prompt = self.formatter.format(&system_prompt, &selected);
         let reply = self.generator.generate(&prompt);
 
         self.sessions
@@ -152,5 +177,28 @@ mod tests {
                 .len(),
             4
         );
+    }
+
+    #[test]
+    fn classification_reaches_the_generated_prompt() {
+        use std::sync::{Arc, Mutex};
+
+        struct CapturingReply(Arc<Mutex<String>>);
+        impl ResponseGenerator for CapturingReply {
+            fn generate(&mut self, prompt: &str) -> String {
+                *self.0.lock().unwrap() = prompt.to_string();
+                "ok".to_string()
+            }
+        }
+
+        let captured = Arc::new(Mutex::new(String::new()));
+        let mut core = AssistantCore::new(Box::new(CapturingReply(captured.clone())));
+        let session_id = core.create_session("gemma-3-1b");
+
+        core.process_message(session_id, "Open Firefox.").unwrap();
+
+        let prompt = captured.lock().unwrap();
+        assert!(prompt.contains("ApplicationControl"));
+        assert!(prompt.contains("SingleTool"));
     }
 }

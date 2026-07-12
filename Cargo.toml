@@ -16,6 +16,8 @@ members = [
     "crates/vector-db",
     "crates/embeddings",
     "crates/memory",
+    "crates/reasoning",
+    "crates/planner",
     "crates/ui",
     "crates/app",
 ]
@@ -45,6 +47,8 @@ llm-runtime = { path = "crates/llm-runtime" }
 vector-db = { path = "crates/vector-db" }
 embeddings = { path = "crates/embeddings" }
 memory = { path = "crates/memory" }
+reasoning = { path = "crates/reasoning" }
+planner = { path = "crates/planner" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

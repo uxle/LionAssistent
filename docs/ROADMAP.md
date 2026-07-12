@@ -11,6 +11,7 @@ actually exists versus what's still planned.
 | 3 | Assistant Core | 🟢 Done and fully verified -- conversation, session-manager, context-manager, prompt-builder, assistant-core all build+test clean in this sandbox (no Slint dependency). Stub response generator only; real LLM is Phase 4. |
 | 4 | LLM Runtime | 🟡 Written, NOT compile-verified in this sandbox -- Candle itself hard-requires rustc 1.88+. `model-registry` (metadata, no ML deps) is fully verified. See note below. |
 | 5 | Memory | 🟢 Done and fully verified -- `vector-db`, `embeddings`, `memory` all build+test clean in this sandbox (no Slint/Candle dependency). SQLite via `rusqlite` (bundled), real cosine-similarity search, real (non-neural) embeddings. |
+| 6 | Planner & Reasoning | 🟢 Done and fully verified -- `reasoning`, `planner` build+test clean, and are now wired into `assistant-core`. Rule-based classifier (no LLM needed), real dependency-graph planning with cycle detection. See note below on scope. |
 | 4 | LLM Runtime | ⬜ Not started |
 | 5 | Memory | ⬜ Not started |
 | 6 | Planner & Reasoning | ⬜ Not started |
@@ -154,3 +155,13 @@ rejected. Wrong order, caught immediately by
 child row first. This is exactly why these crates are built with tests
 alongside them rather than after the fact -- worth calling out as a
 concrete example, not just an abstract claim of "verified."
+
+## Phase 6 checklist
+
+- [x] `reasoning`: `Intent` (12 categories, Ai_reasoning SS6), `ReasoningLevel` (0-4, Ai_reasoning SS5), `IntentClassifier` trait + `KeywordClassifier` (real, dependency-free rule-based classifier -- correctly classifies all five of Ai_reasoning's own canonical examples, used verbatim as tests). 11/11 tests.
+- [x] `planner`: `Plan`/`PlanStep` with a real dependency graph, cycle detection + topological execution order via Kahn's algorithm, `PlanError` distinguishing unknown-dependency from cycle. `Planner::create_plan` is honest about scope: Direct/MemoryLookup/SingleTool requests get one real step; MultiStep/LongRunning requests get a single step that says decomposition needs Phase 4 or Phase 7, rather than fabricating a breakdown (Ai_reasoning SS10 "Never invent tool results" applies to plan steps too). 11/11 tests.
+- [x] `assistant-core` now classifies every message and folds the result into the system prompt actually sent to the generator -- proven by a test that captures the generated prompt and asserts the detected intent/level appear in it, not just logged and ignored.
+- [x] 77/77 tests passing across all 16 non-Slint, non-Candle crates.
+- [ ] **Not done, intentionally:** `process_message` still doesn't *branch* on the plan (e.g. actually calling a tool for `SingleTool` requests) -- there's no Tool Framework (Phase 7) yet for it to call. Classification reaching the prompt is real progress; acting on it is Phase 7's job.
+- [ ] **Not done:** the "Context Optimizer" module (pulling relevant long-term memories into context, per Ai_reasoning SS8) -- `assistant-core` deliberately doesn't depend on `memory` (Phase 5), keeping session persistence as an `app`-level concern. Wiring memory search into context selection is a real, well-motivated follow-up, better done deliberately (with a concrete caller to validate it) than bolted on speculatively here.
+- [ ] **Not done:** "Reflection" as its own subsystem (retrying failed tool calls, suggesting alternatives) -- there's nothing real yet to reflect *on* without Phase 7's tool execution. `Plan::validate()` is the honest Phase 6 subset: structural verification of the plan itself.
