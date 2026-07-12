@@ -18,6 +18,7 @@ members = [
     "crates/memory",
     "crates/reasoning",
     "crates/planner",
+    "crates/tool-framework",
     "crates/ui",
     "crates/app",
 ]
@@ -49,6 +50,7 @@ embeddings = { path = "crates/embeddings" }
 memory = { path = "crates/memory" }
 reasoning = { path = "crates/reasoning" }
 planner = { path = "crates/planner" }
+tool-framework = { path = "crates/tool-framework" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

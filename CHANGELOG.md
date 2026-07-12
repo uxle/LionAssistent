@@ -6,6 +6,12 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 7)
+
+- `tool-framework` crate: `InputSchema`/`ParamSchema` validation against `serde_json::Value` args (reports every problem, not just the first); `ToolRegistry` (register/unregister/get/list, refuses silent duplicate shadowing); `ToolRouter::execute` running the real TCLIS pipeline (lookup -> validate -> permission check -> execute -> structured `ToolResult`), with genuine timeout enforcement via `spawn_blocking` + `tokio::time::timeout`, proven by a test with a stub tool that sleeps 10x longer than its declared timeout.
+- `EchoTool`, `SlowTool`, `DangerousStubTool`: honest stand-ins proving the happy path, timeout enforcement, and permission denial. Not real Linux tools -- those are Phase 8.
+- 97/97 tests passing across all 17 non-Slint, non-Candle crates. Deliberately not yet wired into `assistant-core` -- see `docs/ROADMAP.md` for why.
+
 ### Added (Phase 6)
 
 - `reasoning` crate: `Intent`, `ReasoningLevel`, `IntentClassifier` trait + `KeywordClassifier` (dependency-free rule-based classifier, correctly handles all five of Ai_reasoning's own canonical examples). 11/11 tests.

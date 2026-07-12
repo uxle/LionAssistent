@@ -1,0 +1,12 @@
+[package]
+name = "tool-framework"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Tool registry, router, validation, and timeout enforcement (Development_plan Phase 7; TCLIS SS3 Tool Execution Pipeline). No real Linux tools yet -- that's Phase 8."
+
+[dependencies]
+common = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

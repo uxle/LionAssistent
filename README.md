@@ -10,9 +10,9 @@ Reasoning, Developer Implementation Guide, UI/UX, Plugin SDK, Model Runtime,
 Roadmap) live in the project's planning documents. `docs/ROADMAP.md` tracks
 build status phase by phase.
 
-**Status:** Phase 6 (Planner & Reasoning) done and fully verified. Phases
-1, 3, 5, and 6 are fully verified (build+test+run). Phases 2 (UI) and 4
-(LLM runtime) are written but not compile-verified in the sandbox this was
+**Status:** Phase 7 (Tool Framework) done and fully verified. Phases 1, 3,
+5, 6, and 7 are fully verified (build+test+run). Phases 2 (UI) and 4 (LLM
+runtime) are written but not compile-verified in the sandbox this was
 built in -- see `docs/ROADMAP.md` for exactly why (two unrelated
 toolchain/network limits, not code problems) and what to do about it.
 
@@ -37,6 +37,7 @@ crates/
   memory/           SQLite-backed session persistence + long-term memory + search
   reasoning/        intent + reasoning-level classification (rule-based)
   planner/          dependency-graph plans with cycle detection
+  tool-framework/   tool registry, router, validation, timeout enforcement (stub tools; real ones are Phase 8)
   ui/               Slint desktop shell: theme, sidebar, chat view, composer
   app/              binary entry point (bin name: ai-assistant)
 config/
@@ -64,18 +65,18 @@ cargo test --workspace
 cargo run -p app
 ```
 
-Phase 1, 3, 5, and 6 together (no Slint, no Candle) are fully verified and
-work even on old toolchains:
+Phase 1, 3, 5, 6, and 7 together (no Slint, no Candle) are fully verified
+and work even on old toolchains:
 
 ```bash
 cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
-  -p reasoning -p planner
+  -p reasoning -p planner -p tool-framework
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
-  -p reasoning -p planner
+  -p reasoning -p planner -p tool-framework
 ```
 
 To use a real model once you're building `llm-runtime`/`app` on a modern
