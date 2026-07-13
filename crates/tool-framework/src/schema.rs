@@ -19,6 +19,7 @@ pub enum ParamKind {
     Integer,
     Float,
     Bool,
+    StringArray,
 }
 
 impl ParamKind {
@@ -28,6 +29,12 @@ impl ParamKind {
             ParamKind::Integer => value.is_i64() || value.is_u64(),
             ParamKind::Float => value.is_f64() || value.is_i64() || value.is_u64(),
             ParamKind::Bool => value.is_boolean(),
+            ParamKind::StringArray => {
+                value.is_array()
+                    && value
+                        .as_array()
+                        .is_some_and(|a| a.iter().all(Value::is_string))
+            }
         }
     }
 }
@@ -201,5 +208,22 @@ mod tests {
         args.insert("bogus".into(), json!(1));
         let errors = schema().validate(&args).unwrap_err();
         assert_eq!(errors.len(), 3); // missing text, wrong-type times, unexpected bogus
+    }
+
+    #[test]
+    fn string_array_accepts_arrays_of_strings_only() {
+        let schema = InputSchema::new(vec![ParamSchema::required("items", ParamKind::StringArray)]);
+
+        let mut ok_args = ToolArgs::new();
+        ok_args.insert("items".into(), json!(["a", "b", "c"]));
+        assert!(schema.validate(&ok_args).is_ok());
+
+        let mut bad_args = ToolArgs::new();
+        bad_args.insert("items".into(), json!(["a", 2, "c"]));
+        assert!(schema.validate(&bad_args).is_err());
+
+        let mut not_array_args = ToolArgs::new();
+        not_array_args.insert("items".into(), json!("not an array"));
+        assert!(schema.validate(&not_array_args).is_err());
     }
 }

@@ -6,6 +6,16 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 8)
+
+- `linux-services` crate: `files`, `system`, `processes`, `terminal`, `packages`, `network` -- real, tested, working Linux operations using only `/proc`/`/sys` and standard utilities (no new dependencies). `terminal` runs only a fixed allowlist of commands, args as argv, never through a shell.
+- `clipboard`, `notifications`, `audio`, `display`, `applications` -- real code, tested for graceful failure since this container has no display session, sound server, D-Bus daemon, or backlight device; the same code succeeds on a real desktop.
+- `power` (lock/suspend/hibernate/restart/shutdown) -- implemented, but deliberately never executed, even in this crate's own tests.
+- `tools`: 8 read-only/safe capabilities wired as real `tool_framework::Tool` implementations, replacing Phase 7's stub tools with genuine Linux operations in the pipeline.
+- `tool-framework::ParamKind` gained `StringArray` for terminal command arguments; re-verified (21/21) after the change.
+- Caught a real environment gap this phase: `iproute2` (`ip`) wasn't installed in this sandbox; installed it and made the network module degrade gracefully rather than hard-fail if it's ever missing.
+- 151/151 tests passing across all 19 non-Slint, non-Candle crates.
+
 ### Added (Phase 7)
 
 - `tool-framework` crate: `InputSchema`/`ParamSchema` validation against `serde_json::Value` args (reports every problem, not just the first); `ToolRegistry` (register/unregister/get/list, refuses silent duplicate shadowing); `ToolRouter::execute` running the real TCLIS pipeline (lookup -> validate -> permission check -> execute -> structured `ToolResult`), with genuine timeout enforcement via `spawn_blocking` + `tokio::time::timeout`, proven by a test with a stub tool that sleeps 10x longer than its declared timeout.

@@ -10,9 +10,9 @@ Reasoning, Developer Implementation Guide, UI/UX, Plugin SDK, Model Runtime,
 Roadmap) live in the project's planning documents. `docs/ROADMAP.md` tracks
 build status phase by phase.
 
-**Status:** Phase 7 (Tool Framework) done and fully verified. Phases 1, 3,
-5, 6, and 7 are fully verified (build+test+run). Phases 2 (UI) and 4 (LLM
-runtime) are written but not compile-verified in the sandbox this was
+**Status:** Phase 8 (Linux Integration) done and fully verified. Phases 1,
+3, 5, 6, 7, and 8 are fully verified (build+test+run). Phases 2 (UI) and 4
+(LLM runtime) are written but not compile-verified in the sandbox this was
 built in -- see `docs/ROADMAP.md` for exactly why (two unrelated
 toolchain/network limits, not code problems) and what to do about it.
 
@@ -38,6 +38,7 @@ crates/
   reasoning/        intent + reasoning-level classification (rule-based)
   planner/          dependency-graph plans with cycle detection
   tool-framework/   tool registry, router, validation, timeout enforcement (stub tools; real ones are Phase 8)
+  linux-services/   files/system/processes/terminal/packages/network (real); clipboard/audio/notifications/display/applications (real code, graceful failure here); power (implemented, never auto-executed)
   ui/               Slint desktop shell: theme, sidebar, chat view, composer
   app/              binary entry point (bin name: ai-assistant)
 config/
@@ -65,19 +66,25 @@ cargo test --workspace
 cargo run -p app
 ```
 
-Phase 1, 3, 5, 6, and 7 together (no Slint, no Candle) are fully verified
-and work even on old toolchains:
+Phase 1, 3, 5, 6, 7, and 8 together (no Slint, no Candle) are fully
+verified and work even on old toolchains:
 
 ```bash
 cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
-  -p reasoning -p planner -p tool-framework
+  -p reasoning -p planner -p tool-framework -p linux-services
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
-  -p reasoning -p planner -p tool-framework
+  -p reasoning -p planner -p tool-framework -p linux-services
 ```
+
+`linux-services`' `terminal` module only ever runs commands from a fixed
+allowlist (see `crates/linux-services/src/terminal.rs`), never an
+arbitrary shell string. `power` (lock/suspend/restart/shutdown) is
+implemented but not registered as an automated tool anywhere in this
+codebase -- see `docs/ROADMAP.md` Phase 8 for why.
 
 To use a real model once you're building `llm-runtime`/`app` on a modern
 toolchain: download a Gemma 3 1B GGUF file and its `tokenizer.json`, name

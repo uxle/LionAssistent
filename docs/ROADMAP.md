@@ -13,6 +13,7 @@ actually exists versus what's still planned.
 | 5 | Memory | 🟢 Done and fully verified -- `vector-db`, `embeddings`, `memory` all build+test clean in this sandbox (no Slint/Candle dependency). SQLite via `rusqlite` (bundled), real cosine-similarity search, real (non-neural) embeddings. |
 | 6 | Planner & Reasoning | 🟢 Done and fully verified -- `reasoning`, `planner` build+test clean, and are now wired into `assistant-core`. Rule-based classifier (no LLM needed), real dependency-graph planning with cycle detection. See note below on scope. |
 | 7 | Tool Framework | 🟢 Done and fully verified -- `tool-framework` builds+tests clean. Real registry, router, JSON-arg validation, and genuine timeout enforcement (proven by a test that actually times one out). Stub tools only; real Linux tools are Phase 8. Not yet wired into `assistant-core` -- see note below. |
+| 8 | Linux Integration | 🟢 Done and fully verified -- `linux-services` builds+tests clean (151/151 workspace tests). Files/system/processes/terminal/packages/network are real and tested for genuine success. Clipboard/notifications/audio/display/applications are real code tested for graceful failure (no display session in this container). Power is implemented but never executed, even in tests. 8 capabilities wired into Phase 7's tool pipeline. |
 | 4 | LLM Runtime | ⬜ Not started |
 | 5 | Memory | ⬜ Not started |
 | 6 | Planner & Reasoning | ⬜ Not started |
@@ -176,3 +177,35 @@ concrete example, not just an abstract claim of "verified."
 - [x] 97/97 tests passing across all 17 non-Slint, non-Candle crates.
 - [ ] **Not done, intentionally: wiring into `assistant-core`.** `ToolRouter::execute` is async (needs real timeout enforcement via `tokio::time::timeout`); `assistant-core::process_message` is sync. Bridging them well needs either a real way to extract concrete tool calls (name *and* arguments) from a user request -- which needs a working `llm-runtime` (Phase 4) -- or real tools worth calling (Phase 8). Wiring it up now against stub tools would mean guessing at a design better made once there's something real on the other end, rather than genuine Phase 7 progress.
 - [ ] **Not done:** the real Permission Manager (Phase 9) -- `max_auto_level` is a single configured threshold, not the interactive confirmation-dialog flow PRD 6.6 and Archd SS7 describe. It's an honest, working stand-in, not the real thing.
+
+## Phase 8 checklist
+
+This phase splits honestly into three groups, based on what this
+headless container actually has running -- not a compile-time
+limitation like Phases 2/4, but a genuine runtime difference between a
+container and a desktop session:
+
+**Fully verified with real success paths** (no new dependencies -- `/proc`,
+`/sys`, and shelling out to standard, always-present Linux utilities):
+- [x] `files`: list/read/write/delete (confirm-gated)/rename/move/copy/metadata/search. 10/10 tests.
+- [x] `system`: CPU/memory/uptime/kernel/load average via `/proc`, disk usage via `df`. 7/7 tests.
+- [x] `processes`: list/info via `/proc/[pid]`, `kill` via the `kill` command -- tested only ever against a process the test itself spawned. 4/4 tests.
+- [x] `terminal`: a **fixed allowlist** of commands (`date`, `uptime`, `whoami`, `uname`, `hostname`, `echo`, `sleep`), args passed as argv (never through a shell -- confirmed by a test with shell metacharacters in an argument), genuine timeout enforcement via process kill. A test explicitly confirms `rm -rf /` is rejected before ever spawning. 5/5 tests.
+- [x] `packages`: list (`dpkg-query`) and search (`apt-cache`) tested for real; `install`/`remove` implemented but deliberately never invoked by the test suite (slow, network-dependent, and would leave the sandbox in a different state -- not something a test should do regardless of environment).
+- [x] `network`: interface listing via `/sys/class/net` + `ip addr`. **Caught a real gap during this phase:** this container didn't have `iproute2` installed, so `ip` was missing; fixed by installing it *and* making the code degrade to interface-names-only (rather than failing outright) if `ip` is ever unavailable, since a real system shouldn't hard-fail on a missing optional dependency either. 3/3 tests.
+
+**Real code, tested for graceful failure** (all need a desktop session this container doesn't have -- the same code succeeds on a real desktop):
+- [x] `clipboard` (`xclip`), `notifications` (`notify-send`), `audio` (`pactl`) -- no display/D-Bus/sound-server here. 2 tests each.
+- [x] `display` (backlight brightness via `/sys/class/backlight`) -- a kernel interface, not display-server-dependent, but this container has no physical display at all. 2/2 tests.
+- [x] `applications` (`.desktop` file discovery, XDG spec) -- tested against a fixture file this crate writes itself, since the sandbox has no real desktop entries to rely on; `launch` strips XDG field codes and is tested with both a nonexistent program and one needing no display (`true`). 6/6 tests.
+
+**Implemented, never executed even in its own tests:**
+- [x] `power` (lock/suspend/hibernate/restart/shutdown via `systemctl`/`loginctl`). Tests check only that the right command gets *constructed* (`PowerAction::Shutdown.command() == ("systemctl", ["poweroff"])`) and that only `Lock` is below Administrator permission. Automatically shutting down whatever machine runs `cargo test` -- this sandbox included -- is never a defensible thing for a test to do. 3/3 tests.
+
+**Tool Framework integration:**
+- [x] `tools`: wires 8 read-only/safe capabilities (`system_info`, `disk_usage`, `list_directory`, `read_file`, `list_processes`, `run_terminal_command`, `list_packages`, `search_packages`) as real `tool_framework::Tool` implementations -- Phase 7's registry/router/validation pipeline now routes to genuine Linux operations instead of `EchoTool`/`SlowTool`/`DangerousStubTool`. A test confirms `run_terminal_command` rejects `rm -rf /` through the *full* pipeline (validate -> permission check -> execute), not just at the `terminal` module level directly. 6/6 tests.
+- [x] `tool-framework::ParamKind` gained `StringArray` (needed for terminal command arguments) -- a small, well-justified extension of an already-verified Phase 7 crate, re-verified after the change (21/21).
+- [ ] **Not wrapped as registered tools, intentionally:** `delete_file`, `kill_process`, `install`/`remove` packages, and all of `power` -- these are destructive/administrative (TCLIS SS6 Level 3-4) and deserve the real Permission Manager's confirmation flow (Phase 9) before being reachable through the automated pipeline, not just the router's single `max_auto_level` threshold.
+- [ ] **Not done:** wiring any of this into `assistant-core`/`app`'s live message flow -- same reasoning as Phase 7's checklist: needs real tool-call extraction (Phase 4's `llm-runtime`) to decide *when* to call a tool from a natural-language request, which remains blocked on this sandbox's toolchain.
+
+151/151 tests passing across all 19 non-Slint, non-Candle crates.
