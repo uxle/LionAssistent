@@ -300,6 +300,49 @@ impl Tool for RunTerminalCommandTool {
     }
 }
 
+/// Deferred in Phase 8 pending a real confirmation flow -- Phase 9's
+/// `permission-manager` now provides one, so this is registered.
+pub struct DeleteFileTool;
+
+impl Tool for DeleteFileTool {
+    fn name(&self) -> &str {
+        "delete_file"
+    }
+    fn description(&self) -> &str {
+        "Deletes a file. Destructive -- requires confirmation before it ever reaches execute()."
+    }
+    fn category(&self) -> ToolCategory {
+        ToolCategory::FileManagement
+    }
+    fn permission_level(&self) -> PermissionLevel {
+        PermissionLevel::Destructive
+    }
+    fn timeout(&self) -> Duration {
+        Duration::from_secs(10)
+    }
+    fn input_schema(&self) -> InputSchema {
+        InputSchema::new(vec![ParamSchema::required("path", ParamKind::String)])
+    }
+    fn execute(&self, args: &ToolArgs) -> ToolOutcome {
+        let Some(path) = args.get("path").and_then(|v| v.as_str()) else {
+            return err_outcome("missing required parameter \"path\"");
+        };
+        // Passing confirm=true unconditionally is correct here, not a
+        // bypass: by the time execute() runs, the router has already
+        // been through the Permission Manager's confirmation flow for
+        // this Destructive-level tool. A second confirmation flag inside
+        // files::delete_file would be redundant, not additional safety.
+        match crate::files::delete_file(Path::new(path), true) {
+            Ok(()) => ToolOutcome {
+                success: true,
+                message: format!("deleted {path}"),
+                data: None,
+            },
+            Err(e) => err_outcome(e),
+        }
+    }
+}
+
 pub struct ListPackagesTool;
 
 impl Tool for ListPackagesTool {
@@ -380,6 +423,7 @@ pub fn register_all(registry: &mut tool_framework::ToolRegistry) -> common::AppR
     registry.register(Arc::new(DiskUsageTool))?;
     registry.register(Arc::new(ListDirectoryTool))?;
     registry.register(Arc::new(ReadFileTool))?;
+    registry.register(Arc::new(DeleteFileTool))?;
     registry.register(Arc::new(ListProcessesTool))?;
     registry.register(Arc::new(RunTerminalCommandTool))?;
     registry.register(Arc::new(ListPackagesTool))?;
@@ -443,11 +487,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn delete_file_tool_actually_deletes_when_authorized() {
+        let dir = std::env::temp_dir().join("linux-services-tools-test-delete");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("remove-me.txt");
+        std::fs::write(&path, "data").unwrap();
+
+        // PermissionLevel::Destructive as the router's own max_auto_level
+        // fallback, since no real PermissionChecker is configured here --
+        // see permission_integration test for the real Permission Manager
+        // actually gating this.
+        let mut registry = tool_framework::ToolRegistry::new();
+        register_all(&mut registry).unwrap();
+        let router = tool_framework::ToolRouter::new(registry, PermissionLevel::Destructive);
+
+        let mut args = ToolArgs::new();
+        args.insert("path".into(), serde_json::json!(path.to_str().unwrap()));
+        let result = router.execute("delete_file", args).await;
+
+        assert!(result.success, "{}", result.message);
+        assert!(!path.exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn delete_file_tool_is_denied_above_the_configured_max_level() {
+        // Safe < Destructive, so this should never even attempt the delete.
+        let result = router()
+            .execute("delete_file", {
+                let mut args = ToolArgs::new();
+                args.insert(
+                    "path".into(),
+                    serde_json::json!("/tmp/should-not-be-touched"),
+                );
+                args
+            })
+            .await;
+        assert!(!result.success);
+    }
+
+    #[tokio::test]
     async fn all_tools_are_registered() {
         let router = router();
         assert_eq!(
             router.registry().list(),
             vec![
+                "delete_file",
                 "disk_usage",
                 "list_directory",
                 "list_packages",

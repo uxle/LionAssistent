@@ -10,10 +10,10 @@ Reasoning, Developer Implementation Guide, UI/UX, Plugin SDK, Model Runtime,
 Roadmap) live in the project's planning documents. `docs/ROADMAP.md` tracks
 build status phase by phase.
 
-**Status:** Phase 8 (Linux Integration) done and fully verified. Phases 1,
-3, 5, 6, 7, and 8 are fully verified (build+test+run). Phases 2 (UI) and 4
-(LLM runtime) are written but not compile-verified in the sandbox this was
-built in -- see `docs/ROADMAP.md` for exactly why (two unrelated
+**Status:** Phase 9 (Permission System) done and fully verified. Phases 1,
+3, 5, 6, 7, 8, and 9 are fully verified (build+test+run). Phases 2 (UI)
+and 4 (LLM runtime) are written but not compile-verified in the sandbox
+this was built in -- see `docs/ROADMAP.md` for exactly why (two unrelated
 toolchain/network limits, not code problems) and what to do about it.
 
 ## Workspace layout
@@ -39,6 +39,7 @@ crates/
   planner/          dependency-graph plans with cycle detection
   tool-framework/   tool registry, router, validation, timeout enforcement (stub tools; real ones are Phase 8)
   linux-services/   files/system/processes/terminal/packages/network (real); clipboard/audio/notifications/display/applications (real code, graceful failure here); power (implemented, never auto-executed)
+  permission-manager/ real Permission Manager: policy, confirmation, remembered decisions, audit log
   ui/               Slint desktop shell: theme, sidebar, chat view, composer
   app/              binary entry point (bin name: ai-assistant)
 config/
@@ -66,25 +67,28 @@ cargo test --workspace
 cargo run -p app
 ```
 
-Phase 1, 3, 5, 6, 7, and 8 together (no Slint, no Candle) are fully
+Phase 1, 3, 5, 6, 7, 8, and 9 together (no Slint, no Candle) are fully
 verified and work even on old toolchains:
 
 ```bash
 cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
-  -p reasoning -p planner -p tool-framework -p linux-services
+  -p reasoning -p planner -p tool-framework -p linux-services -p permission-manager
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
-  -p reasoning -p planner -p tool-framework -p linux-services
+  -p reasoning -p planner -p tool-framework -p linux-services -p permission-manager
 ```
 
 `linux-services`' `terminal` module only ever runs commands from a fixed
 allowlist (see `crates/linux-services/src/terminal.rs`), never an
 arbitrary shell string. `power` (lock/suspend/restart/shutdown) is
 implemented but not registered as an automated tool anywhere in this
-codebase -- see `docs/ROADMAP.md` Phase 8 for why.
+codebase -- see `docs/ROADMAP.md` Phase 8 for why. Destructive tools
+(`delete_file`) now go through `permission-manager`'s real confirmation
+flow -- see `crates/linux-services/tests/permission_integration.rs` for
+the full pipeline exercised end to end.
 
 To use a real model once you're building `llm-runtime`/`app` on a modern
 toolchain: download a Gemma 3 1B GGUF file and its `tokenizer.json`, name

@@ -6,6 +6,15 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 9)
+
+- `permission-manager` crate: `SecurityRules`/`PermissionDecision` (policy), `ConfirmationHandler` trait + `AlwaysDeny`/`AlwaysApproveForTestingOnly`, `PermissionManager` (SQLite-backed remembered decisions with expiry, audit logging, `check_and_log` pipeline).
+- `tool-framework::ToolRouter` gained a pluggable `PermissionChecker`, replacing the `max_auto_level` threshold with `permission-manager`'s real authorization -- fully backward compatible.
+- `linux-services` registers `DeleteFileTool`, deferred in Phase 8 pending exactly this confirmation flow.
+- Full-stack integration test (`crates/linux-services/tests/permission_integration.rs`) proving linux-services + tool-framework + permission-manager genuinely work together: confirmation denial/approval, remembered decisions, Administrator-level policy denial.
+- Caught a real bug this phase: the audit log's `message` never included the tool name (it went into a separate `module` field); fixed.
+- 175/175 tests passing across all 21 non-Slint, non-Candle crates.
+
 ### Added (Phase 8)
 
 - `linux-services` crate: `files`, `system`, `processes`, `terminal`, `packages`, `network` -- real, tested, working Linux operations using only `/proc`/`/sys` and standard utilities (no new dependencies). `terminal` runs only a fixed allowlist of commands, args as argv, never through a shell.

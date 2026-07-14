@@ -8,7 +8,20 @@
 //! than exceptional control flow.
 
 use crate::{PermissionLevel, ToolArgs, ToolRegistry};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+/// Something that can authorize a tool call for real (Phase 9's
+/// Permission Manager implements this). `&self` and a plain `bool`
+/// return rather than `async`/`Result`: a real UI confirmation dialog
+/// isn't wired up yet (Phase 2's UI has its own toolchain constraint --
+/// see docs/ROADMAP.md), so there's nothing to genuinely `.await` here
+/// yet, and any internal failure (e.g. a database error) should fail
+/// closed (deny) rather than propagate as a separate error path the
+/// router would need to handle differently from an ordinary denial.
+pub trait PermissionChecker: Send + Sync {
+    fn authorize(&self, tool_name: &str, level: PermissionLevel, description: &str) -> bool;
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResultStatus {
@@ -56,11 +69,12 @@ fn failure(status: ResultStatus, message: String, started: Instant) -> ToolResul
 
 pub struct ToolRouter {
     registry: ToolRegistry,
-    /// Tools at or below this level run without confirmation. Above it,
-    /// they're denied outright for now -- this is a simple stand-in for
-    /// the real Permission Manager and its interactive confirmation
-    /// dialogs (Phase 9), not a substitute for it.
+    /// Used only when no `checker` is configured: tools at or below this
+    /// level run without confirmation, above it they're denied outright.
+    /// A simple built-in fallback, not a substitute for a real
+    /// `PermissionChecker`.
     max_auto_level: PermissionLevel,
+    checker: Option<Arc<dyn PermissionChecker>>,
 }
 
 impl ToolRouter {
@@ -68,7 +82,15 @@ impl ToolRouter {
         Self {
             registry,
             max_auto_level,
+            checker: None,
         }
+    }
+
+    /// Replaces the simple `max_auto_level` threshold with a real
+    /// `PermissionChecker` (Phase 9's `PermissionManager`, most likely).
+    pub fn with_permission_checker(mut self, checker: Arc<dyn PermissionChecker>) -> Self {
+        self.checker = Some(checker);
+        self
     }
 
     pub fn registry(&self) -> &ToolRegistry {
@@ -104,14 +126,16 @@ impl ToolRouter {
             );
         }
 
-        if tool.permission_level() > self.max_auto_level {
+        let authorized = match &self.checker {
+            Some(checker) => checker.authorize(name, tool.permission_level(), tool.description()),
+            None => tool.permission_level() <= self.max_auto_level,
+        };
+        if !authorized {
             return failure(
                 ResultStatus::PermissionDenied,
                 format!(
-                    "{name} requires permission level {:?}, above the configured maximum {:?} \
-                     (interactive confirmation is Phase 9's job, not yet wired up)",
-                    tool.permission_level(),
-                    self.max_auto_level
+                    "{name} (permission level {:?}) was not authorized to run",
+                    tool.permission_level()
                 ),
                 started,
             );
@@ -221,6 +245,32 @@ mod tests {
         );
         let result = router.execute("dangerous-stub", ToolArgs::new()).await;
         assert_eq!(result.status, ResultStatus::Ok);
+    }
+
+    #[tokio::test]
+    async fn a_configured_checker_overrides_the_max_auto_level_fallback() {
+        struct AlwaysDeny;
+        impl PermissionChecker for AlwaysDeny {
+            fn authorize(
+                &self,
+                _tool_name: &str,
+                _level: PermissionLevel,
+                _description: &str,
+            ) -> bool {
+                false
+            }
+        }
+
+        // EchoTool is ReadOnly, well within Administrator's max_auto_level
+        // -- but a configured checker takes priority over that fallback
+        // entirely, denying anyway.
+        let router = router_with(vec![Arc::new(EchoTool)], PermissionLevel::Administrator)
+            .with_permission_checker(Arc::new(AlwaysDeny));
+
+        let mut args = ToolArgs::new();
+        args.insert("text".into(), serde_json::json!("hi"));
+        let result = router.execute("echo", args).await;
+        assert_eq!(result.status, ResultStatus::PermissionDenied);
     }
 
     #[test]

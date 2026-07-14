@@ -20,6 +20,7 @@ members = [
     "crates/planner",
     "crates/tool-framework",
     "crates/linux-services",
+    "crates/permission-manager",
     "crates/ui",
     "crates/app",
 ]
@@ -53,6 +54,7 @@ reasoning = { path = "crates/reasoning" }
 planner = { path = "crates/planner" }
 tool-framework = { path = "crates/tool-framework" }
 linux-services = { path = "crates/linux-services" }
+permission-manager = { path = "crates/permission-manager" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

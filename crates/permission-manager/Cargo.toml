@@ -1,0 +1,16 @@
+[package]
+name = "permission-manager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The real Permission Manager: authorization decisions, confirmation handling, remembered decisions with expiry, and audit logging (Development_plan Phase 9; PRD 6.6; Ai_reasoning SS17)."
+
+[dependencies]
+common = { workspace = true }
+tool-framework = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+# Same pin as memory (Phase 5) and for the same reason: 0.32+ uses
+# c"..." string literals (stable since rustc 1.77); this sandbox has
+# 1.75. On a modern toolchain this pin can be removed.
+rusqlite = { version = "=0.31.0", features = ["bundled"] }

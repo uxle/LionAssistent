@@ -25,7 +25,7 @@ pub mod stubs;
 
 pub use common::PermissionLevel;
 pub use registry::ToolRegistry;
-pub use router::{ResultStatus, ToolResult, ToolRouter};
+pub use router::{PermissionChecker, ResultStatus, ToolResult, ToolRouter};
 pub use schema::{InputSchema, ParamKind, ParamSchema, ToolArgs, ValidationError};
 
 use std::time::Duration;
