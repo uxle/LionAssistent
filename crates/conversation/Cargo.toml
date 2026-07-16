@@ -1,0 +1,10 @@
+[package]
+name = "conversation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Message and conversation model shared by session-manager, context-manager, prompt-builder, and assistant-core (Development_plan Phase 3)."
+
+[dependencies]
+common = { workspace = true }
+serde = { workspace = true }

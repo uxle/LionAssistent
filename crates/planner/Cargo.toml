@@ -1,0 +1,9 @@
+[package]
+name = "planner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Dependency-aware plans with cycle detection and topological execution order (Development_plan Phase 6; Ai_reasoning SS7 Planning; Apis SS5 Planner API)."
+
+[dependencies]
+reasoning = { workspace = true }

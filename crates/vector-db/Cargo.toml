@@ -1,0 +1,8 @@
+[package]
+name = "vector-db"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Brute-force cosine-similarity vector search, appropriate at local single-user scale (Archd SS6 Semantic Memory; DBDMS SS7 Vector Database)."
+
+[dependencies]

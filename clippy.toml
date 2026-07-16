@@ -1,0 +1,3 @@
+# Clippy configuration for the Local Linux AI Assistant workspace.
+too-many-arguments-threshold = 8
+type-complexity-threshold = 300

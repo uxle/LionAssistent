@@ -1,0 +1,72 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/common",
+    "crates/utilities",
+    "crates/config",
+    "crates/logger",
+    "crates/event-bus",
+    "crates/conversation",
+    "crates/session-manager",
+    "crates/context-manager",
+    "crates/prompt-builder",
+    "crates/assistant-core",
+    "crates/model-registry",
+    "crates/llm-runtime",
+    "crates/vector-db",
+    "crates/embeddings",
+    "crates/memory",
+    "crates/reasoning",
+    "crates/planner",
+    "crates/tool-framework",
+    "crates/linux-services",
+    "crates/permission-manager",
+    "crates/ui",
+    "crates/app",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+# Shared dependency versions. Member crates pull these in with
+# `dep = { workspace = true }` so every crate in the workspace stays on the
+# same version (DIG SS5 coding standards, Apis SS1 API design principles).
+[workspace.dependencies]
+common = { path = "crates/common" }
+utilities = { path = "crates/utilities" }
+config = { path = "crates/config" }
+logger = { path = "crates/logger" }
+event-bus = { path = "crates/event-bus" }
+ui = { path = "crates/ui" }
+conversation = { path = "crates/conversation" }
+session-manager = { path = "crates/session-manager" }
+context-manager = { path = "crates/context-manager" }
+prompt-builder = { path = "crates/prompt-builder" }
+assistant-core = { path = "crates/assistant-core" }
+model-registry = { path = "crates/model-registry" }
+llm-runtime = { path = "crates/llm-runtime" }
+vector-db = { path = "crates/vector-db" }
+embeddings = { path = "crates/embeddings" }
+memory = { path = "crates/memory" }
+reasoning = { path = "crates/reasoning" }
+planner = { path = "crates/planner" }
+tool-framework = { path = "crates/tool-framework" }
+linux-services = { path = "crates/linux-services" }
+permission-manager = { path = "crates/permission-manager" }
+
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+thiserror = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+# Pinned <1.13: uuid 1.13+ requires getrandom ^0.3, and 1.21+ requires
+# getrandom ^0.4, which requires the `edition2024` Cargo feature -- not
+# supported by this sandbox's Rust 1.75. On a modern toolchain (1.85+),
+# remove this pin and run `cargo update -p uuid` to pick up the latest.
+uuid = { version = "=1.12.1", features = ["v4", "serde"] }

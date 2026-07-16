@@ -1,0 +1,10 @@
+[package]
+name = "session-manager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "In-memory session tracking (DBDMS Sessions table; TDS SS2 Session Manager)."
+
+[dependencies]
+common = { workspace = true }
+conversation = { workspace = true }

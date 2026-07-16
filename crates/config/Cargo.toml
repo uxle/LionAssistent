@@ -1,0 +1,17 @@
+[package]
+name = "config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Application configuration loading and persistence (TDS SS6, Apis SS11)."
+
+[dependencies]
+common = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+# Transitive via toml -> toml_edit, whose own requirement ("^2.3.0") is
+# open-ended and would otherwise resolve to the newest indexmap release,
+# which needs rustc 1.82+ (2.12+) or the `edition2024` feature (2.14+) --
+# neither supported by this sandbox's Rust 1.75. 2.11.4 is the newest
+# release with rust_version <= 1.75. On a modern toolchain, remove this.
+indexmap = "=2.11.4"

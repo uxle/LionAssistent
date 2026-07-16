@@ -1,0 +1,8 @@
+[package]
+name = "model-registry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Tracks locally available models by filesystem discovery (Mms SS6, SS16). No ML dependencies -- pure metadata, fully testable."
+
+[dependencies]

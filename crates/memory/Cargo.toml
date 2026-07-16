@@ -1,0 +1,22 @@
+[package]
+name = "memory"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SQLite-backed persistent memory: sessions/messages, long-term memories, and semantic search over them (Development_plan Phase 5)."
+
+[dependencies]
+common = { workspace = true }
+conversation = { workspace = true }
+session-manager = { workspace = true }
+embeddings = { workspace = true }
+vector-db = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+# rusqlite 0.32+ uses c"..." string literals (stable since rustc 1.77);
+# this sandbox has 1.75. 0.31.0 is the newest release before that. On a
+# modern toolchain this pin can be removed.
+rusqlite = { version = "=0.31.0", features = ["bundled"] }
+# hashlink 0.12+ requires rustc 1.85; 0.11.1 is the newest release before
+# that bump. On a modern toolchain this pin can be removed too.
+hashlink = "=0.11.1"

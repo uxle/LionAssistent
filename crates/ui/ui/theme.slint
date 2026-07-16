@@ -1,0 +1,23 @@
+// Design tokens (UI-UX SS3). Kept intentionally small for Phase 2 --
+// expand toward the full token set (typography scale, shadows, full
+// border/radius variants) in Phase 17 "UI Polish".
+export global Palette {
+    in-out property <bool> dark: true;
+
+    out property <color> window-bg: dark ? #1e1e2e : #f7f7fb;
+    out property <color> surface: dark ? #262637 : #ffffff;
+    out property <color> sidebar-bg: dark ? #181822 : #eceef3;
+    out property <color> nav-active-bg: dark ? #2f2f52 : #e4e1fb;
+    out property <color> text-primary: dark ? #f2f2f7 : #1c1c26;
+    out property <color> text-secondary: dark ? #a0a0b8 : #6b6b80;
+    out property <color> border-color: dark ? #33334a : #dcdce6;
+    out property <color> accent: #7c6cf0;
+    out property <color> user-bubble: dark ? #3a3a54 : #e4e1fb;
+    out property <color> assistant-bubble: dark ? #2c2c40 : #ffffff;
+    out property <color> system-bubble: dark ? #202030 : #eeeef4;
+
+    out property <length> radius-md: 10px;
+    out property <length> space-sm: 8px;
+    out property <length> space-md: 16px;
+    out property <length> space-lg: 24px;
+}

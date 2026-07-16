@@ -1,0 +1,16 @@
+[package]
+name = "ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Slint desktop UI shell: main window, theme system, sidebar navigation, chat view, composer (Development_plan Phase 2)."
+
+[build-dependencies]
+slint-build = "1"
+
+[dependencies]
+common = { workspace = true }
+event-bus = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+slint = "1"

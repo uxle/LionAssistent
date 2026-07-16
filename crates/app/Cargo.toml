@@ -1,0 +1,24 @@
+[package]
+name = "app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Binary entry point for the Local Linux AI Assistant."
+
+[[bin]]
+name = "ai-assistant"
+path = "src/main.rs"
+
+[dependencies]
+common = { workspace = true }
+config = { workspace = true }
+logger = { workspace = true }
+event-bus = { workspace = true }
+assistant-core = { workspace = true }
+model-registry = { workspace = true }
+llm-runtime = { workspace = true }
+memory = { workspace = true }
+embeddings = { workspace = true }
+ui = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
