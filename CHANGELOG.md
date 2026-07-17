@@ -6,6 +6,16 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 10)
+
+- `workflow-engine` crate: `Workflow`/`WorkflowStep` (named, persisted, referencing real tools -- unlike Phase 6's ephemeral, unfabricated `Plan`), dependency-graph validation with conditional-branch ordering checks, `parallel_stages()` for identifying concurrency-safe steps.
+- `RunControl`: genuine pause/resume/cancel, tested with a background task confirmed to actually block mid-pause, not just return immediately.
+- `run_workflow`: executes through `tool-framework`'s real `ToolRouter`, so Phase 9's Permission Manager gates workflow steps like any other tool call.
+- `Scheduler`: pure "what's due now" logic, no background timer.
+- `WorkflowStore`: SQLite-backed persistence for workflows and run history.
+- Caught a real bug this phase: a test assumed a recurring schedule fires immediately; the implementation's actual (and correct) behavior delays the first fire by one interval, matching cron/`setInterval` convention. Fixed the test and documented the semantic explicitly.
+- 203/203 tests passing across all 23 non-Slint, non-Candle crates.
+
 ### Added (Phase 9)
 
 - `permission-manager` crate: `SecurityRules`/`PermissionDecision` (policy), `ConfirmationHandler` trait + `AlwaysDeny`/`AlwaysApproveForTestingOnly`, `PermissionManager` (SQLite-backed remembered decisions with expiry, audit logging, `check_and_log` pipeline).
