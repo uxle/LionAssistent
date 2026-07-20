@@ -1,0 +1,20 @@
+[package]
+name = "workflow-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Named, reusable, persistent sequences of real tool calls: builder, scheduler, task queue, and executor (Development_plan Phase 10; Apis SS15 Workflow API; DBDMS SS3 Workflows/Workflow Runs)."
+
+[dependencies]
+common = { workspace = true }
+tool-framework = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+tokio = { workspace = true }
+# Same pin as memory (Phase 5) and permission-manager (Phase 9), same
+# reason: 0.32+ uses c"..." string literals (stable since rustc 1.77);
+# this sandbox has 1.75. On a modern toolchain this pin can be removed.
+rusqlite = { version = "=0.31.0", features = ["bundled"] }
