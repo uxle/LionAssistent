@@ -22,6 +22,8 @@ members = [
     "crates/linux-services",
     "crates/permission-manager",
     "crates/workflow-engine",
+    "crates/example-plugin",
+    "crates/plugin-manager",
     "crates/ui",
     "crates/app",
 ]
@@ -57,6 +59,8 @@ tool-framework = { path = "crates/tool-framework" }
 linux-services = { path = "crates/linux-services" }
 permission-manager = { path = "crates/permission-manager" }
 workflow-engine = { path = "crates/workflow-engine" }
+example-plugin = { path = "crates/example-plugin" }
+plugin-manager = { path = "crates/plugin-manager" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
