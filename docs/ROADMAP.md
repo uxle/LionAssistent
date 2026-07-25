@@ -16,6 +16,7 @@ actually exists versus what's still planned.
 | 8 | Linux Integration | 🟢 Done and fully verified -- `linux-services` builds+tests clean (151/151 workspace tests). Files/system/processes/terminal/packages/network are real and tested for genuine success. Clipboard/notifications/audio/display/applications are real code tested for graceful failure (no display session in this container). Power is implemented but never executed, even in tests. 8 capabilities wired into Phase 7's tool pipeline. |
 | 9 | Permission System | 🟢 Done and fully verified -- `permission-manager` builds+tests clean, now the *real* checker behind `tool-framework`'s router (replacing the `max_auto_level` stand-in), with SQLite-backed remembered decisions and audit logging. Full-stack integration test proves linux-services + tool-framework + permission-manager genuinely work together. 175/175 workspace tests. |
 | 10 | Workflow Engine | 🟢 Done and fully verified -- `workflow-engine` builds+tests clean. Named, persisted, SQLite-backed workflows over real tool-framework tool calls (not Phase 6's inferred, unfabricated plans); dependency-graph validation with conditional branches; genuine pause/resume/cancel; a pure, testable scheduler. 203/203 workspace tests. |
+| 11 | Plugin SDK | 🟢 Done and fully verified -- `plugin-manager` builds+tests clean, including *real* `.so` dynamic loading via `libloading` (not just in-process registration). 227/227 workspace tests. See note below on the two loading mechanisms and why. |
 | 4 | LLM Runtime | ⬜ Not started |
 | 5 | Memory | ⬜ Not started |
 | 6 | Planner & Reasoning | ⬜ Not started |
@@ -234,3 +235,25 @@ container and a desktop session:
 - [x] 203/203 tests passing across all 23 non-Slint, non-Candle crates.
 - [ ] **Not done:** true concurrent execution of same-stage steps -- `parallel_stages()` correctly identifies *which* steps could run concurrently; the executor doesn't yet dispatch them that way, since doing so needs either a new dependency or `Arc`-wrapping `ToolRouter` for a capability nothing here currently needs (every registered tool completes well under a second).
 - [ ] **Not done:** wiring the scheduler into a real always-running loop, or workflows into `assistant-core`/`app`'s live message flow -- same reasoning as Phases 7-9: there's no natural trigger point yet without either a working `llm-runtime` (Phase 4) to decide when a request should kick off a workflow, or a long-running `app` process to host the scheduler's poll loop (which the current `app` only runs while its window is open, itself blocked on Phase 2's UI toolchain constraint).
+
+## Phase 11 checklist
+
+This phase raised a real architectural question up front: Plugins.md
+SS4 describes a `plugin.so` file, implying genuine dynamic loading --
+but Rust has no stable ABI across compiler versions (or even different
+dependency graphs of the same version), which makes passing Rust trait
+objects across a `dlopen`ed boundary a real, well-known safety hazard,
+not a solved problem. Rather than either skip dynamic loading entirely
+or paper over that risk, this phase built **two honestly-scoped
+mechanisms**:
+
+- [x] `plugin`: the `Plugin` trait (Plugins.md SS8: `initialize`/`shutdown`/`metadata`/`health_check`/`register_tools`) -- the **primary** mechanism. A plugin is in-process Rust code handed to `PluginManager::register` directly. Its tools go through `tool_framework::Tool` -- the exact same interface, and later the exact same registry/router/permission pipeline, as built-in tools. No separate, weaker path for plugin-contributed capabilities.
+- [x] `dynamic`: **real** `dlopen`-based loading via `libloading` (pinned to 0.8.9; 0.9+ needs rustc 1.88), across a plain C ABI (`extern "C"` functions, C strings, freed by the plugin's own allocator) rather than Rust types. A real `example-plugin` crate (`crate-type = ["cdylib"]`) is compiled to an actual `.so` and loaded by the test suite -- this is genuinely testable in this sandbox, unlike Phase 2/4's Slint/Candle gaps, since dynamic linking is a Linux capability, not a toolchain or model-hosting limitation. 4/4 tests passing, including loading a real compiled plugin twice independently and confirming a plain `libc.so.6` (present on any Linux system) fails cleanly on the missing-symbol lookup rather than crashing. Deliberately narrow (name/version only) -- extending it to carry richer data needs a deliberately-designed `#[repr(C)]` vtable, real future work rather than something to improvise here.
+- [x] `manifest`: `PluginManifest` (TOML, Plugins.md SS5), permission string parsing (unrecognized permissions are dropped, not fatal -- forward compatible), platform support checking, and `major.minor.patch` SDK version compatibility (SS15). 6/6 tests.
+- [x] `lifecycle`: `PluginState` (Discovered -> Validated -> Active -> Deactivated, or Failed at any point) -- collapsed from Plugins.md SS6's full diagram to the states that are actual decision points.
+- [x] `policy`: `PluginPermissionPolicy` -- a simpler, capability-based cousin of Phase 9's tool-level `PermissionManager`, gating whether a plugin may activate at all (Plugins.md SS13: users can review/grant/revoke/disable at any time). 5/5 tests.
+- [x] `manager`: `PluginManager` ties it together -- discovery (scanning for `manifest.toml`, mirroring Phase 8's `.desktop`-file discovery pattern), validation, activation/deactivation with `catch_unwind`-isolated failures (Plugins.md SS16: "Plugin failures must not crash the application" -- tested with a plugin that deliberately fails `initialize()`), and `collect_tools()` for pulling active plugins' tools into the host's real `ToolRegistry`. 9/9 tests.
+- [x] 227/227 tests passing across all 25 non-Slint, non-Candle crates.
+- [ ] **Not done:** a `#[repr(C)]` vtable letting a genuinely dynamically-loaded plugin contribute real tools (not just report its name/version) -- real, valuable future work, deliberately not improvised inline given how easy an ABI mistake is to get subtly wrong.
+- [ ] **Not done:** SQLite persistence for installed-plugin state (DBDMS SS3 "Plugins" table) -- `PluginManager` is fully in-memory this phase. A reasonable enhancement, not included here so the unsafe FFI work got full attention rather than being diluted alongside another SQLite store in the same phase.
+- [ ] **Not done:** wiring plugin-contributed tools into `assistant-core`/`app`'s live pipeline -- same reasoning as Phases 7-10.

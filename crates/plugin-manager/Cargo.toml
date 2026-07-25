@@ -1,0 +1,20 @@
+[package]
+name = "plugin-manager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Plugin manifests, lifecycle, permission policy, and both in-process and real dynamic (.so) loading (Development_plan Phase 11; Plugins.md)."
+
+[dependencies]
+common = { workspace = true }
+tool-framework = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+# 0.9+ requires rustc 1.88; 0.8.9 is the newest release before that bump
+# and works fine on this sandbox's 1.75. On a modern toolchain this pin
+# can be loosened.
+libloading = "=0.8.9"
+
+[dev-dependencies]
+example-plugin = { workspace = true }

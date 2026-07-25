@@ -1582,6 +1582,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "example-plugin"
+version = "0.1.0"
+
+[[package]]
 name = "exr"
 version = "1.74.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4328,6 +4332,19 @@ name = "planner"
 version = "0.1.0"
 dependencies = [
  "reasoning",
+]
+
+[[package]]
+name = "plugin-manager"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "example-plugin",
+ "libloading",
+ "serde",
+ "toml 0.8.23",
+ "tool-framework",
+ "tracing",
 ]
 
 [[package]]

@@ -6,6 +6,13 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 11)
+
+- `plugin-manager` crate: `PluginManifest` (TOML parsing, SS15 SDK version compatibility), `PluginState` lifecycle, `PluginPermissionPolicy`, `PluginManager` (discovery, validation, activation/deactivation with panic isolation, tool collection into `tool_framework::ToolRegistry`).
+- `Plugin` trait: the primary, safe, in-process loading mechanism -- plugin tools use the exact same `tool_framework::Tool` interface as built-in ones.
+- `dynamic`: real `dlopen`-based loading via `libloading` (pinned 0.8.9), across a plain C ABI boundary rather than Rust trait objects (Rust has no stable cross-compiler ABI). A real `example-plugin` crate compiles to an actual `.so` that the test suite loads and queries.
+- 227/227 tests passing across all 25 non-Slint, non-Candle crates.
+
 ### Added (Phase 10)
 
 - `workflow-engine` crate: `Workflow`/`WorkflowStep` (named, persisted, referencing real tools -- unlike Phase 6's ephemeral, unfabricated `Plan`), dependency-graph validation with conditional-branch ordering checks, `parallel_stages()` for identifying concurrency-safe steps.
