@@ -10,8 +10,8 @@ Reasoning, Developer Implementation Guide, UI/UX, Plugin SDK, Model Runtime,
 Roadmap) live in the project's planning documents. `docs/ROADMAP.md` tracks
 build status phase by phase.
 
-**Status:** Phase 11 (Plugin SDK) done and fully verified. Phases 1, 3,
-5, 6, 7, 8, 9, 10, and 11 are fully verified (build+test+run). Phases 2
+**Status:** Phase 12 (Voice) done and fully verified. Phases 1, 3, 5, 6,
+7, 8, 9, 10, 11, and 12 are fully verified (build+test+run). Phases 2
 (UI) and 4 (LLM runtime) are written but not compile-verified in the
 sandbox this was built in -- see `docs/ROADMAP.md` for exactly why (two
 unrelated toolchain/network limits, not code problems) and what to do
@@ -44,6 +44,7 @@ crates/
   workflow-engine/  named, persisted workflows over real tool calls: builder, scheduler, pause/resume/cancel, executor
   plugin-manager/   plugin manifests, lifecycle, permission policy; in-process Plugin trait (primary) + real dlopen loading (metadata only)
   example-plugin/   a real cdylib plugin.so proving plugin-manager's dynamic loader actually works
+  voice/            TTS (espeak-ng, real) / STT (pocketsphinx, real pipeline) / VAD (energy-based) / WAV I/O
   ui/               Slint desktop shell: theme, sidebar, chat view, composer
   app/              binary entry point (bin name: ai-assistant)
 config/
@@ -71,21 +72,29 @@ cargo test --workspace
 cargo run -p app
 ```
 
-Phase 1, 3, 5, 6, 7, 8, 9, 10, and 11 together (no Slint, no Candle) are
-fully verified and work even on old toolchains:
+Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, and 12 together (no Slint, no Candle)
+are fully verified and work even on old toolchains:
 
 ```bash
 cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
   -p reasoning -p planner -p tool-framework -p linux-services \
-  -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin
+  -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
+  -p voice
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
   -p reasoning -p planner -p tool-framework -p linux-services \
-  -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin
+  -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
+  -p voice
 ```
+
+`voice`'s tests shell out to `espeak-ng`, `pocketsphinx_continuous`, and
+`sox` -- install them first (`apt install espeak-ng pocketsphinx
+pocketsphinx-en-us sox libsox-fmt-all` on Debian/Ubuntu) or those
+specific tests will fail with "not available" errors rather than being
+skipped.
 
 `linux-services`' `terminal` module only ever runs commands from a fixed
 allowlist (see `crates/linux-services/src/terminal.rs`), never an

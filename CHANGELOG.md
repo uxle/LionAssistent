@@ -6,6 +6,13 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 12)
+
+- `voice` crate: `wav` (dependency-free WAV read/write, chunk-scanning parser), `tts::EspeakTts` (real speech synthesis via `espeak-ng`, no model download needed), `stt::PocketsphinxStt` (real transcription via `pocketsphinx`, models bundled by `apt`), `vad::VoiceActivityDetector` (energy-based, honestly scoped short of true wake-word recognition).
+- Unlike Phase 4's LLM, no model download was needed here at all -- both `espeak-ng` and `pocketsphinx-en-us` ship complete models via `apt`. Verified empirically before writing tests that STT accuracy on synthetic (TTS-generated) speech is poor, an expected property of the classical-acoustic-model-vs-robotic-voice combination, not a bug; tests check pipeline reliability (produces output for real speech, none for silence) rather than exact accuracy.
+- 247/247 tests passing across all 27 non-Slint, non-Candle crates.
+- Recovered mid-phase from a full sandbox filesystem reset (this environment's documented "resets between tasks" behavior) by restoring the last saved tarball (Phase 11) -- full git history intact, re-verified 227/227 before continuing.
+
 ### Added (Phase 11)
 
 - `plugin-manager` crate: `PluginManifest` (TOML parsing, SS15 SDK version compatibility), `PluginState` lifecycle, `PluginPermissionPolicy`, `PluginManager` (discovery, validation, activation/deactivation with panic isolation, tool collection into `tool_framework::ToolRegistry`).

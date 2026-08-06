@@ -17,6 +17,7 @@ actually exists versus what's still planned.
 | 9 | Permission System | 🟢 Done and fully verified -- `permission-manager` builds+tests clean, now the *real* checker behind `tool-framework`'s router (replacing the `max_auto_level` stand-in), with SQLite-backed remembered decisions and audit logging. Full-stack integration test proves linux-services + tool-framework + permission-manager genuinely work together. 175/175 workspace tests. |
 | 10 | Workflow Engine | 🟢 Done and fully verified -- `workflow-engine` builds+tests clean. Named, persisted, SQLite-backed workflows over real tool-framework tool calls (not Phase 6's inferred, unfabricated plans); dependency-graph validation with conditional branches; genuine pause/resume/cancel; a pure, testable scheduler. 203/203 workspace tests. |
 | 11 | Plugin SDK | 🟢 Done and fully verified -- `plugin-manager` builds+tests clean, including *real* `.so` dynamic loading via `libloading` (not just in-process registration). 227/227 workspace tests. See note below on the two loading mechanisms and why. |
+| 12 | Voice | 🟢 Done and fully verified -- `voice` builds+tests clean, including *real* speech synthesis (`espeak-ng`) and *real* transcription (`pocketsphinx`, models bundled via `apt` -- no download needed, unlike Phase 4). 247/247 workspace tests. See note below on mechanical reliability vs. accuracy. |
 | 4 | LLM Runtime | ⬜ Not started |
 | 5 | Memory | ⬜ Not started |
 | 6 | Planner & Reasoning | ⬜ Not started |
@@ -257,3 +258,38 @@ mechanisms**:
 - [ ] **Not done:** a `#[repr(C)]` vtable letting a genuinely dynamically-loaded plugin contribute real tools (not just report its name/version) -- real, valuable future work, deliberately not improvised inline given how easy an ABI mistake is to get subtly wrong.
 - [ ] **Not done:** SQLite persistence for installed-plugin state (DBDMS SS3 "Plugins" table) -- `PluginManager` is fully in-memory this phase. A reasonable enhancement, not included here so the unsafe FFI work got full attention rather than being diluted alongside another SQLite store in the same phase.
 - [ ] **Not done:** wiring plugin-contributed tools into `assistant-core`/`app`'s live pipeline -- same reasoning as Phases 7-10.
+
+## Phase 12 checklist
+
+Unlike Phase 4's LLM, nothing in this phase needed a model download from
+a host this sandbox can't reach: both `espeak-ng` (TTS) and
+`pocketsphinx-en-us` (STT) are classical, non-neural tools that ship
+complete, usable models via plain `apt install`. That made *mechanical*
+verification straightforward; the honest caveat is *accuracy*, checked
+empirically before writing a single test (see below), not assumed.
+
+- [x] `wav`: pure-Rust, dependency-free WAV read/write, chunk-scanning (not assuming a fixed chunk order, since real files -- including `sox`/`espeak-ng` output -- can have extra chunks between `fmt ` and `data`). 5/5 tests.
+- [x] `tts`: `EspeakTts::synthesize_to_wav` -- real, reliable speech synthesis, verified by reading back real audio data and confirming longer text produces longer audio. `speak()`/`play_wav` additionally try live playback via `aplay`, which fails gracefully here (no sound server, same honest gap as `linux_services::audio` from Phase 8) and would succeed on a real desktop. 4/4 tests.
+- [x] `stt`: `PocketsphinxStt::transcribe` -- a genuinely real pipeline (real acoustic model, real audio samples, real output), but manually verified *before* writing tests that its accuracy on this sandbox's only available test audio (`espeak-ng`-synthesized speech) is poor -- "check the weather" transcribed as "you cannot wear lots". That's an expected property of feeding robotic, formant-synthesized speech into a classical acoustic model trained on natural human speech, not a bug in the integration; real microphone input would perform meaningfully better against the identical model. Tests check what's actually reliable instead: the pipeline produces *some* output for real speech and *no* output for silence, not exact transcription accuracy that wouldn't hold up even on a correctly-working system. 3/3 tests.
+- [x] `vad`: `VoiceActivityDetector` -- energy-based voice activity detection, honestly scoped short of true wake-word phrase recognition (Ai_reasoning-style "did they say *this specific phrase*" needs a trained keyword-spotting model, the same model-hosting constraint as Phase 4). Real, reliable, fully tested: silence vs. tone discrimination, frame-level onset detection, configurable sensitivity. 8/8 tests.
+- [x] 247/247 tests passing across all 27 non-Slint, non-Candle crates.
+- [ ] **Not done:** true wake-word phrase recognition, live microphone capture, or live continuous listening -- all need either a trained model (blocked the same way as Phase 4) or real audio hardware (blocked the same way as Phase 8's audio/clipboard/notifications/display). `Apis SS14`'s `start_listening`/`stop_listening`/`interrupt` describe a live streaming interaction model this sandbox cannot exercise; the file-based `synthesize_to_wav`/`transcribe` equivalents are what's real and tested here.
+
+### A sandbox note worth being transparent about
+
+Partway through this phase, the sandbox's underlying filesystem reset --
+losing everything in `/home/claude`, including the entire project and
+even the apt-installed Rust toolchain from Phase 1, down to just the
+`voice` crate files already in progress at that moment. This matches
+this environment's own documented behavior ("file system resets between
+tasks"); it's not something Phase 12's code did. Recovery was
+straightforward specifically *because* every phase's final state was
+packaged into a tarball and shared via `present_files` along the way,
+which lives somewhere more persistent than the sandbox's live
+filesystem: extracting the last saved archive (Phase 11) restored the
+complete project, full git history included, and a full re-verify
+(`cargo test`, every crate) came back 227/227 -- an exact match for the
+state before the reset. The Rust toolchain and the voice-related `apt`
+packages were reinstalled the same way as the first time, and produced
+identical versions. Worth keeping in mind for anyone continuing this
+project in a similarly ephemeral environment: save checkpoints often.

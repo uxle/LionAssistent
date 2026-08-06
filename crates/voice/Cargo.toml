@@ -1,0 +1,10 @@
+[package]
+name = "voice"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Text-to-speech, speech-to-text, voice activity detection, and WAV I/O (Development_plan Phase 12; Apis SS14 Voice API)."
+
+[dependencies]
+common = { workspace = true }
+tracing = { workspace = true }
