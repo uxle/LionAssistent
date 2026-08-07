@@ -18,16 +18,7 @@ actually exists versus what's still planned.
 | 10 | Workflow Engine | 🟢 Done and fully verified -- `workflow-engine` builds+tests clean. Named, persisted, SQLite-backed workflows over real tool-framework tool calls (not Phase 6's inferred, unfabricated plans); dependency-graph validation with conditional branches; genuine pause/resume/cancel; a pure, testable scheduler. 203/203 workspace tests. |
 | 11 | Plugin SDK | 🟢 Done and fully verified -- `plugin-manager` builds+tests clean, including *real* `.so` dynamic loading via `libloading` (not just in-process registration). 227/227 workspace tests. See note below on the two loading mechanisms and why. |
 | 12 | Voice | 🟢 Done and fully verified -- `voice` builds+tests clean, including *real* speech synthesis (`espeak-ng`) and *real* transcription (`pocketsphinx`, models bundled via `apt` -- no download needed, unlike Phase 4). 247/247 workspace tests. See note below on mechanical reliability vs. accuracy. |
-| 4 | LLM Runtime | ⬜ Not started |
-| 5 | Memory | ⬜ Not started |
-| 6 | Planner & Reasoning | ⬜ Not started |
-| 7 | Tool Framework | ⬜ Not started |
-| 8 | Linux Integration | ⬜ Not started |
-| 9 | Permission System | ⬜ Not started |
-| 10 | Workflow Engine | ⬜ Not started |
-| 11 | Plugin SDK | ⬜ Not started |
-| 12 | Voice | ⬜ Not started |
-| 13 | Search | ⬜ Not started |
+| 13 | Search | 🟢 Done and fully verified -- `search` builds+tests clean (286/286 workspace tests). File search wraps Phase 8's real filesystem search; memory search wraps Phase 5's real semantic search; command search indexes Phase 7's registered tools and Phase 10's saved workflows; Global Search merges all three via one dependency-free ranking function. All four exposed as real `ToolCategory::Search` tools (declared in Phase 7, unused until now), gated by Phase 9's real Permission Manager. See note below on scope (no settings search yet) and a pre-existing clippy finding noticed along the way. |
 | 14 | Networking | ⬜ Not started |
 | 15 | Diagnostics | ⬜ Not started |
 | 16 | Security | ⬜ Not started |
@@ -293,3 +284,39 @@ state before the reset. The Rust toolchain and the voice-related `apt`
 packages were reinstalled the same way as the first time, and produced
 identical versions. Worth keeping in mind for anyone continuing this
 project in a similarly ephemeral environment: save checkpoints often.
+
+## Phase 13 checklist
+
+Four focused providers behind one aggregator, all wired up as real tools
+-- the first tenant of `ToolCategory::Search`, declared in Phase 7 and
+unused ever since.
+
+- [x] `ranking::score_text` -- a small, deterministic, dependency-free relevance scorer (exact match > prefix > substring > partial multi-word > in-order subsequence fallback > no match) shared by file and command search, so `SearchEngine` has a consistent scale to merge otherwise hard-to-compare results without pulling in a fuzzy-matching crate (DIG SS11). 9/9 tests, including hand-traced edge cases for the subsequence fallback.
+- [x] `file_search::FileSearchProvider` -- thin wrapper over Phase 8's real `linux_services::files::search`, adding multi-root aggregation and ranking; that function already does the real recursive, depth-capped filesystem work. 6/6 tests.
+- [x] `memory_search::MemorySearchProvider` -- wraps Phase 5's real `memory::MemoryStore::search_memory` (genuine semantic search, not reimplemented). `MemoryStore` is `Send` but not `Sync` (same reason `permission-manager`'s `Connection` needed one), so this crate wraps it in `Arc<Mutex<_>>` itself rather than changing Phase 5's code. Scores are honestly rank-derived, not `memory`'s real similarity numbers -- those aren't part of its public API. 4/4 tests.
+- [x] `command_search::CommandSearchProvider` -- indexes Phase 7's registered `Tool`s and Phase 10's saved, *enabled* `Workflow`s into a snapshot rebuilt via `reindex()`, rather than querying either store live (neither is thread-safe for arbitrary sharing, and both change far less often than memories do). 7/7 tests, including reindex picking up a newly-registered tool.
+- [x] `engine::SearchEngine` -- the "Global Search" module: queries all three providers and merges into one ranked list, deterministic tie-breaks. Deliberately does *not* add a fourth "search settings" provider (TCLIS SS4) -- there's no real settings UI yet to index, just a spec (PRD SS6.7); a small, additive change once Phase 2's UI (and this sandbox's toolchain gap) has one. 4/4 tests.
+- [x] `tools` -- `search_files`, `search_memory`, `search_commands`, `global_search`, all `PermissionLevel::ReadOnly`, all `ToolCategory::Search`, registered via `register_all` following `linux_services::tools`'s exact pattern. 6/6 unit tests + a `permission_integration.rs` proving all four run cleanly through a real `PermissionManager` configured to deny everything above ReadOnly (they're never asked), and that calls are genuinely audit-logged.
+- [x] 286/286 tests passing across all 24 non-Slint, non-Candle crates.
+- [ ] **Not done:** wiring into `assistant-core`/`app`'s live message flow, and command search re-indexing automatically on tool/plugin/workflow changes (would need Archd SS9's event bus wired up as the trigger) -- both deferred for the same reasons Phases 7-12 already documented: `app` still can't be compile-verified in this sandbox (Phase 2's UI), and there's no `llm-runtime` yet to turn a user's request into a concrete tool call in the first place (Phase 4). Settings search is also not done, for the reason above.
+
+### Two things worth being transparent about
+
+This container started completely fresh (no filesystem reset mid-phase
+this time, just a new sandbox for a new session) -- `rustc`/`cargo`
+weren't installed at all, and `rustfmt`/clippy, `iproute2` (Phase 8's
+`network` tests), and `espeak-ng`/`pocketsphinx`/`sox` (Phase 12's
+`voice` tests) were all missing too. Reinstalling exactly what
+`docs/ROADMAP.md`'s Phase 8 and 12 notes already say this environment
+needs brought every one of the 247 previously-documented tests back to
+green with zero source changes -- good evidence the restored code itself
+was never the problem, just a clean container needing the same setup
+every previous phase already needed.
+
+Running `cargo clippy --workspace --all-targets -- -D warnings` (the
+exact command `.github/workflows/ci.yml` runs) turned up two pre-existing
+findings unrelated to this phase's own code, both left exactly as found
+except one trivial fix:
+
+- `memory`'s own test helper used `Box::new(HashingEmbedder::default())`, which `clippy::box_default` flags in favor of `Box::<HashingEmbedder>::default()`. Fixed there (and used the shorter form in every new test in this phase) -- a one-line, zero-risk, purely stylistic change, re-verified 9/9 `memory` tests still pass.
+- `example-plugin`'s `free_string` (the `dynamic`/FFI loading path from Phase 11) trips `clippy::not_unsafe_ptr_arg_deref` -- a public function dereferences a raw pointer (`CString::from_raw`) without being marked `unsafe`. This is a deny-by-default lint touching a C-ABI boundary this phase has no context to safely change; **left as-is** and flagged here for whoever picks up Phase 11-adjacent work next, rather than risking a rushed fix to raw-pointer/FFI code.

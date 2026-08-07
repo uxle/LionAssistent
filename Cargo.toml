@@ -25,6 +25,7 @@ members = [
     "crates/example-plugin",
     "crates/plugin-manager",
     "crates/voice",
+    "crates/search",
     "crates/ui",
     "crates/app",
 ]
@@ -63,6 +64,7 @@ workflow-engine = { path = "crates/workflow-engine" }
 example-plugin = { path = "crates/example-plugin" }
 plugin-manager = { path = "crates/plugin-manager" }
 voice = { path = "crates/voice" }
+search = { path = "crates/search" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

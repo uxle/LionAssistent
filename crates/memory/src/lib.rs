@@ -128,7 +128,7 @@ mod tests {
     use session_manager::SessionManager;
 
     fn test_store() -> MemoryStore {
-        MemoryStore::in_memory(Box::new(HashingEmbedder::default())).unwrap()
+        MemoryStore::in_memory(Box::<HashingEmbedder>::default()).unwrap()
     }
 
     #[test]

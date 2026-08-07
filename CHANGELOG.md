@@ -6,6 +6,15 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 13)
+
+- `search` crate: `ranking::score_text` (deterministic, dependency-free relevance scoring), `FileSearchProvider` (wraps Phase 8's real `linux_services::files::search`), `MemorySearchProvider` (wraps Phase 5's real `memory::MemoryStore::search_memory`), `CommandSearchProvider` (indexes Phase 7's registered tools + Phase 10's saved, enabled workflows), `SearchEngine` (the "Global Search" module, merging all three into one ranked list).
+- `search_files`, `search_memory`, `search_commands`, `global_search`: four new `PermissionLevel::ReadOnly`, `ToolCategory::Search` tools -- the first real use of `ToolCategory::Search`, declared in Phase 7 and unused since. Registered via `register_all`, same pattern as `linux_services::tools`.
+- `crates/search/tests/permission_integration.rs`: proves all four search tools run cleanly through a real `PermissionManager` (Phase 9) configured to deny everything above ReadOnly, and that calls are genuinely audit-logged.
+- `MemoryStore` is `Send` but not `Sync` (unshared `Connection`/`RefCell`-cached index); `MemorySearchProvider` wraps it in `Arc<Mutex<_>>` itself, the same fix `permission-manager` already applied to its own `Connection`, without changing Phase 5's code.
+- Along the way: fixed a pre-existing `clippy::box_default` finding in `memory`'s own test helper (one-line, zero-risk); noticed but deliberately left alone a pre-existing `clippy::not_unsafe_ptr_arg_deref` finding in `example-plugin`'s FFI code (Phase 11, out of this phase's scope to safely touch) -- see `docs/ROADMAP.md` Phase 13 notes for both.
+- 286/286 tests passing across all 24 non-Slint, non-Candle crates.
+
 ### Added (Phase 12)
 
 - `voice` crate: `wav` (dependency-free WAV read/write, chunk-scanning parser), `tts::EspeakTts` (real speech synthesis via `espeak-ng`, no model download needed), `stt::PocketsphinxStt` (real transcription via `pocketsphinx`, models bundled by `apt`), `vad::VoiceActivityDetector` (energy-based, honestly scoped short of true wake-word recognition).
