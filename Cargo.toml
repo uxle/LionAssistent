@@ -28,6 +28,9 @@ members = [
     "crates/search",
     "crates/network",
     "crates/updater",
+    "crates/metrics",
+    "crates/telemetry",
+    "crates/diagnostics",
     "crates/ui",
     "crates/app",
 ]
@@ -69,6 +72,9 @@ voice = { path = "crates/voice" }
 search = { path = "crates/search" }
 network = { path = "crates/network" }
 updater = { path = "crates/updater" }
+metrics = { path = "crates/metrics" }
+telemetry = { path = "crates/telemetry" }
+diagnostics = { path = "crates/diagnostics" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

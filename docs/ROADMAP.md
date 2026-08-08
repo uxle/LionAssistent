@@ -20,7 +20,8 @@ actually exists versus what's still planned.
 | 12 | Voice | 🟢 Done and fully verified -- `voice` builds+tests clean, including *real* speech synthesis (`espeak-ng`) and *real* transcription (`pocketsphinx`, models bundled via `apt` -- no download needed, unlike Phase 4). 247/247 workspace tests. See note below on mechanical reliability vs. accuracy. |
 | 13 | Search | 🟢 Done and fully verified -- `search` builds+tests clean (286/286 workspace tests). File search wraps Phase 8's real filesystem search; memory search wraps Phase 5's real semantic search; command search indexes Phase 7's registered tools and Phase 10's saved workflows; Global Search merges all three via one dependency-free ranking function. All four exposed as real `ToolCategory::Search` tools (declared in Phase 7, unused until now), gated by Phase 9's real Permission Manager. See note below on scope (no settings search yet) and a pre-existing clippy finding noticed along the way. |
 | 14 | Networking | 🟢 Done and fully verified -- `network` and `updater` build+test clean (312/312 workspace tests). Real HTTPS via `ureq` + the OS's own certificate trust store (not a compiled-in list -- see the Phase 14 notes below for why that distinction mattered in practice here, not just in theory), verified against a real external host during development and against a std-only local mock server in the test suite. `check_for_updates`/`download_update` are real `ToolCategory::PackageManagement` tools; neither accepts a URL from a caller, and neither auto-installs anything -- see notes below. |
-| 15 | Diagnostics | ⬜ Not started |
+| 15 | Diagnostics | 🟢 Done and fully verified -- `metrics`, `telemetry`, and `diagnostics` build+test clean (342/342 workspace tests). Real CPU/memory/uptime sampling (reuses Phase 8's `linux_services::system`, nothing reimplemented); telemetry is double-gated opt-in with a closed, non-identifying event vocabulary enforced by the type system, not just documentation; a global panic hook writes structured local crash reports without disturbing normal panic output. `get_diagnostics_report` is a real `ReadOnly` tool. See notes below. |
+| 16 | Security | ⬜ Not started |
 | 15 | Diagnostics | ⬜ Not started |
 | 16 | Security | ⬜ Not started |
 | 17 | UI Polish | ⬜ Not started |
@@ -359,3 +360,32 @@ Four pins total (`zeroize`, `idna_adapter`, both in `network`'s
 `Cargo.toml` with comments explaining why) is the entire cost of this
 gap. Unlike Phases 2 and 4, there is nothing left blocking this one on a
 newer rustc -- it's already fully resolved.
+
+## Phase 15 checklist
+
+Three crates, one per concern, tied together by one report.
+
+- [x] `metrics::MetricsRegistry` -- thread-safe counters/gauges/timers behind `RwLock`s, `BTreeMap`-ordered snapshots for deterministic output. 11/11 tests, including a genuine 8-thread concurrent-increment stress test (all 800 increments land, none lost to a race).
+- [x] `metrics::PerformanceMonitor` -- samples real system state via Phase 8's already-verified `linux_services::system::system_info` (no `/proc` parsing duplicated here), records gauges, keeps a bounded rolling history. `run_periodic_sampling` exists as a ready-to-use async helper but isn't spawned anywhere in this crate -- PRD SS3's "no unsafe hidden background behavior" means nothing here starts a background task on its own; that's `app`'s call to make, later.
+- [x] `telemetry::TelemetryEventKind` / `TelemetryClient` -- see the crate's own doc comment before touching it. Two independent, explicit gates (`enabled`, `endpoint`) both must be true before any network call happens; `record()` always no-ops when disabled rather than requiring call sites to check first; the event vocabulary is a closed enum so a caller cannot construct an arbitrary/identifying event name even by mistake. 11/11 tests, including two that point `flush()` at an address nothing is listening on and confirm it returns `Ok(0)` instead of erroring -- proof the gates are checked *before* any connection is attempted, not just documented as if they were.
+- [x] `diagnostics::install_panic_hook` -- a global panic hook writing a small local JSON crash report (message, source location, a force-captured backtrace regardless of `RUST_BACKTRACE`) for any panic on any thread, then still calling whatever hook ran before it, so normal panic output is unaffected. Crash-report construction (`from_panic_info`) and file writing are tested as plain functions, independent of the global hook, specifically to avoid the test-isolation hazard of mutating process-wide panic state from parallel tests; one additional test does exercise the real `catch_unwind` -> hook -> file path, with a documented note on why it's the only test in the crate allowed to do that. 8/8 tests.
+- [x] `diagnostics::build_report` / `get_diagnostics_report` -- the phase's actual deliverable ("Debug tools"): one real, `ReadOnly`, `ToolCategory::System` tool reporting a metrics snapshot, crash report count, and telemetry's enabled-status (never its buffered *content* -- `report.rs` only ever calls `telemetry.is_enabled()`/`buffered_count()`, nothing that could leak what's actually queued).
+- [x] 342/342 tests passing across all 29 non-Slint, non-Candle crates.
+- [ ] **Not done, deliberately:**
+  - **No concrete telemetry endpoint or default-on anywhere.** This phase built the (thoroughly gated) machinery; turning it on for real is a product decision for later, made explicitly, not something this phase should default toward.
+  - **`install_panic_hook` is not called anywhere yet.** Like every tool `register_all`, wiring it into `app`'s actual startup is deferred for the usual reason (`app` still can't be compile-verified here, Phase 2's UI).
+  - Wiring into `assistant-core`/`app`'s live message flow generally -- same reason as every phase since 7.
+
+### A note on testing a global panic hook
+
+`std::panic::set_hook` is process-wide state, and Rust's default test
+runner executes tests from the same binary in parallel threads. Only one
+test in this workspace (`diagnostics::crash::tests::from_panic_info_extracts_a_string_literal_message`)
+actually swaps the hook, and it restores the previous one immediately
+after; as long as no *other* test in the same binary panics
+concurrently, this is safe. If a future phase adds another
+deliberately-panicking test to this crate, it's worth knowing this
+constraint exists rather than rediscovering it as a flaky test --
+serializing such tests (`--test-threads=1`, or a small serialization
+crate) would be the fix, not a dependency this phase pulled in for a
+single test.

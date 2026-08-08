@@ -1,0 +1,14 @@
+[package]
+name = "metrics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "In-process metrics registry and a performance monitor sampling real system stats (Development_plan Phase 15 'Metrics'/'Performance Monitor' modules)."
+
+[dependencies]
+common = { workspace = true }
+linux-services = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }

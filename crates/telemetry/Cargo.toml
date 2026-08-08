@@ -1,0 +1,13 @@
+[package]
+name = "telemetry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Strictly opt-in, coarse-grained usage telemetry (Development_plan Phase 15 'Telemetry (Optional)' module). Disabled unless explicitly turned on by the caller -- see this crate's docs before touching anything in it."
+
+[dependencies]
+common = { workspace = true }
+network = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

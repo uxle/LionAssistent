@@ -1325,6 +1325,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "diagnostics"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "metrics",
+ "serde",
+ "serde_json",
+ "telemetry",
+ "tokio",
+ "tool-framework",
+ "tracing",
+]
+
+[[package]]
 name = "dispatch"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3420,6 +3434,18 @@ dependencies = [
  "session-manager",
  "uuid",
  "vector-db",
+]
+
+[[package]]
+name = "metrics"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "linux-services",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5727,6 +5753,17 @@ dependencies = [
  "filetime",
  "libc",
  "xattr",
+]
+
+[[package]]
+name = "telemetry"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "network",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

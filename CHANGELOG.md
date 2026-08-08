@@ -6,6 +6,13 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 15)
+
+- `metrics` crate: `MetricsRegistry` (thread-safe counters/gauges/timers, deterministic `BTreeMap`-ordered snapshots) and `PerformanceMonitor` (samples real CPU/memory/uptime/load via Phase 8's `linux_services::system::system_info`, records into the registry, keeps a bounded rolling history). A `run_periodic_sampling` helper exists but isn't started anywhere automatically -- PRD SS3 rules out hidden background behavior.
+- `telemetry` crate: strictly opt-in, double-gated (`enabled` AND `endpoint` must both be explicit) usage telemetry. `TelemetryEventKind` is a closed enum, not a free-form string -- callers cannot construct an event outside the fixed vocabulary; the one optional label is length-capped. `record()` always no-ops when disabled; `flush()` is the only network touchpoint in the crate and is a true no-op (verified against an unreachable address, not just by inspection) unless both gates are open.
+- `diagnostics` crate: `install_panic_hook` writes a structured local JSON crash report for any panic on any thread, then chains to whatever hook was previously installed -- normal panic output is unaffected. Crash-report construction/writing is tested independently of mutating the global hook, with one additional test exercising the full `catch_unwind` -> hook -> file path safely. `build_report`/`get_diagnostics_report` (real, `ReadOnly`, `ToolCategory::System` tool) ties metrics + crash count + telemetry status together -- never telemetry's buffered event content.
+- 342/342 tests passing across all 29 non-Slint, non-Candle crates.
+
 ### Added (Phase 14)
 
 - `network` crate: `HttpClient` (synchronous, matching every other stateful crate in this workspace -- see its doc comment), real `GET`/`POST`+JSON/streaming `download` via `ureq`, backed by the OS's own certificate trust store (`rustls-native-certs`) rather than a compiled-in root list -- see `docs/ROADMAP.md`'s Phase 14 notes for why that distinction mattered in practice, not just in theory, in this sandbox.
