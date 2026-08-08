@@ -19,7 +19,8 @@ actually exists versus what's still planned.
 | 11 | Plugin SDK | 🟢 Done and fully verified -- `plugin-manager` builds+tests clean, including *real* `.so` dynamic loading via `libloading` (not just in-process registration). 227/227 workspace tests. See note below on the two loading mechanisms and why. |
 | 12 | Voice | 🟢 Done and fully verified -- `voice` builds+tests clean, including *real* speech synthesis (`espeak-ng`) and *real* transcription (`pocketsphinx`, models bundled via `apt` -- no download needed, unlike Phase 4). 247/247 workspace tests. See note below on mechanical reliability vs. accuracy. |
 | 13 | Search | 🟢 Done and fully verified -- `search` builds+tests clean (286/286 workspace tests). File search wraps Phase 8's real filesystem search; memory search wraps Phase 5's real semantic search; command search indexes Phase 7's registered tools and Phase 10's saved workflows; Global Search merges all three via one dependency-free ranking function. All four exposed as real `ToolCategory::Search` tools (declared in Phase 7, unused until now), gated by Phase 9's real Permission Manager. See note below on scope (no settings search yet) and a pre-existing clippy finding noticed along the way. |
-| 14 | Networking | ⬜ Not started |
+| 14 | Networking | 🟢 Done and fully verified -- `network` and `updater` build+test clean (312/312 workspace tests). Real HTTPS via `ureq` + the OS's own certificate trust store (not a compiled-in list -- see the Phase 14 notes below for why that distinction mattered in practice here, not just in theory), verified against a real external host during development and against a std-only local mock server in the test suite. `check_for_updates`/`download_update` are real `ToolCategory::PackageManagement` tools; neither accepts a URL from a caller, and neither auto-installs anything -- see notes below. |
+| 15 | Diagnostics | ⬜ Not started |
 | 15 | Diagnostics | ⬜ Not started |
 | 16 | Security | ⬜ Not started |
 | 17 | UI Polish | ⬜ Not started |
@@ -320,3 +321,41 @@ except one trivial fix:
 
 - `memory`'s own test helper used `Box::new(HashingEmbedder::default())`, which `clippy::box_default` flags in favor of `Box::<HashingEmbedder>::default()`. Fixed there (and used the shorter form in every new test in this phase) -- a one-line, zero-risk, purely stylistic change, re-verified 9/9 `memory` tests still pass.
 - `example-plugin`'s `free_string` (the `dynamic`/FFI loading path from Phase 11) trips `clippy::not_unsafe_ptr_arg_deref` -- a public function dereferences a raw pointer (`CString::from_raw`) without being marked `unsafe`. This is a deny-by-default lint touching a C-ABI boundary this phase has no context to safely change; **left as-is** and flagged here for whoever picks up Phase 11-adjacent work next, rather than risking a rushed fix to raw-pointer/FFI code.
+
+## Phase 14 checklist
+
+Two crates: `network` (the HTTP client and the building blocks
+underneath it) and `updater` (the one concrete, narrow thing built on
+top of it this phase).
+
+- [x] `network::HttpClient` -- synchronous by design (see the crate's doc comment for why that actually matches the rest of this workspace better than an async client would), real `GET`/`POST`+JSON/streaming `download`, backed by `ureq`. 8/8 tests, including a genuine transport-failure case (connection refused) and a response-size-limit case that confirms a partially-written file gets cleaned up, not left behind.
+- [x] `network::testing::MockServer` -- a ~50-line, std-only, one-request HTTP/1.1 mock server, so every test above (and every `updater` test) runs against real loopback sockets, never the real internet. Exposed as a normal public module, not `#[cfg(test)]`-gated, specifically so `updater`'s tests can use it too.
+- [x] The OS's own certificate trust store, not `rustls`'s bundled list -- via `rustls-native-certs`. This turned out to matter for real, not just as a theoretical "more correct for a desktop app" choice: `ureq`'s default TLS setup failed real HTTPS requests in this exact sandbox with `InvalidCertificate(UnknownIssuer)`, while `curl` against the same host worked immediately (`curl` reads the system store; this environment sets `SSL_CERT_FILE` for exactly that reason). See `client::system_tls_config`'s doc comment for the full story.
+- [x] `updater::check_for_update` / `updater::download_update` -- version comparison via `semver` (not string comparison -- one of the new tests exists specifically to prove `"1.9.0"` correctly loses to `"1.10.0"`, which a naive string compare gets backwards), against a small original JSON manifest format (nothing in the existing docs specified one). A missing manifest (404) is "nothing to report," not an error; a malformed one, or a genuinely unreachable server, is. 9/9 tests.
+- [x] `check_for_updates` (`ReadOnly`) / `download_update` (`Moderate`) -- real `ToolCategory::PackageManagement` tools (the closest existing category; TCLIS SS4 lists "Update packages" under it, and neither `ToolCategory::Network` -- already Phase 8's *local network status* category -- nor `ToolCategory::System` was as good a fit). **Neither tool accepts a URL as input** -- the manifest URL is fixed at construction time by whatever composes the registry, never something a tool call can redirect; see `tools`' module doc comment. 6/6 unit tests + a `permission_integration.rs` proving `check_for_updates` needs no confirmation and `download_update` genuinely does (denied under `AlwaysDeny`, proceeds under `AlwaysApproveForTestingOnly`) against a real `PermissionManager`, not just the router's simple threshold fallback.
+- [x] 312/312 tests passing across all 26 non-Slint, non-Candle crates.
+- [ ] **Not done, deliberately:**
+  - **No generic "fetch any URL" tool.** TCLIS SS4's categories are all about local system control; an open-ended web-fetch capability reachable from natural language is a materially broader security surface than anything else in this workspace, and nothing in the specs actually asks for it. `network::HttpClient` is there as a library for the next concrete, well-scoped feature that needs it -- not exposed wholesale.
+  - **No auto-install / self-replacing-binary update flow.** `download_update` stops at "the file is on disk." Replacing a running binary safely, atomically, and consistently across deb/rpm/AppImage/Flatpak/Snap (Phase 20) is a different, much riskier problem that a Networking phase shouldn't decide unilaterally -- see `download`'s module doc comment.
+  - **No concrete "optional cloud feature."** This phase built the enabling infrastructure (PRD SS3 rules out a *required* cloud dependency, not an opt-in one); a specific feature on top is future work, matching MMS SS19's own framing of cloud model providers as future, user-configurable, and optional.
+  - Wiring into `assistant-core`/`app`'s live message flow -- same reason as every phase since 7: `app` still can't be compile-verified here (Phase 2's UI), and there's no `llm-runtime` yet to turn a request into a concrete tool call in the first place (Phase 4).
+
+### Finding a working HTTP stack on this sandbox's rustc 1.75 took real trial and error
+
+Worth documenting in full, since it's a different *kind* of gap than
+Phases 2 and 4's: those need a genuinely newer compiler (Slint 1.77+,
+Candle's `zip` dependency 1.88+) and nothing short of that helps. This
+one turned out to be fully solvable *without* a newer rustc -- but not
+on the first, second, or third try:
+
+1. `reqwest` (both the 0.12 and 0.11 lines, both TLS backends) kept failing to even download its dependency tree: the *latest* releases of several unrelated transitive dependencies (`cpufeatures`, `zeroize`, `indexmap`, `idna_adapter`) have each independently adopted Cargo's `edition2024` resolver, which needs a much newer Cargo than 1.75 ships -- not a version *this* workspace controls directly.
+2. Switched to `ureq` (a much smaller dependency tree) -- hit the exact same wall via `zeroize`, then `idna_adapter`.
+3. Pinning those two specific crates to slightly older versions (`zeroize =1.7.0`, `idna_adapter =1.1.0`, both otherwise-unremarkable point releases) was enough: the whole tree resolved and **compiled**.
+4. Compiling isn't the same as working: a real HTTPS request against crates.io failed TLS certificate validation (`UnknownIssuer`), even though `curl` against the same host succeeded immediately. That gap -- not the compiler -- was the real second problem, and pointed at `rustls`'s bundled root list rather than the sandbox's networking itself.
+5. `native-tls` (OpenSSL) was the obvious next thing to try, since `curl` uses it successfully here -- but `openssl-sys` itself declares a hard `rustc 1.80+` requirement, a real language-level floor no version pin can work around (the same category of wall as Slint/Candle, just discovered one layer deeper).
+6. `rustls-native-certs`, feeding the *system's* trust store into the already-working `rustls` setup from step 3, was the actual fix -- no OpenSSL needed, no newer rustc needed. A real `GET` against `crates.io`'s API, parsed as JSON, worked end to end.
+
+Four pins total (`zeroize`, `idna_adapter`, both in `network`'s
+`Cargo.toml` with comments explaining why) is the entire cost of this
+gap. Unlike Phases 2 and 4, there is nothing left blocking this one on a
+newer rustc -- it's already fully resolved.

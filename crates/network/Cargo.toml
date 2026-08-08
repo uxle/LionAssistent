@@ -1,0 +1,32 @@
+[package]
+name = "network"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "HTTP client, downloads, and the online-capability building blocks for Phase 14 (Development_plan Phase 14 'Networking'; PRD SS6.9/Archd SS20 'optional cloud features' -- always opt-in, never a core dependency per PRD SS3)."
+
+[dependencies]
+common = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ureq = { version = "2", features = ["json"] }
+# ureq's default TLS (rustls) ships a fixed, compiled-in root certificate
+# list. That's fine in general, but this is a Linux *desktop* app, where
+# the OS's own trust store (updated by the normal `ca-certificates`
+# package, not by this binary's release cycle) is the more correct
+# source of truth -- rustls-native-certs bridges the two. See
+# `client::system_tls_config`'s doc comment for the sandbox-specific
+# reason this was actually necessary to discover here, not just a
+# nice-to-have.
+rustls-native-certs = "0.7"
+
+# Pins required to build on this workspace's rustc 1.75 floor (matching
+# the `uuid`/`rusqlite` precedent elsewhere in the workspace): the latest
+# `zeroize` and `idna_adapter` releases both require Cargo's `edition2024`
+# resolver, which needs a much newer Cargo than 1.75 ships. Unlike the
+# Slint (Phase 2) and Candle (Phase 4) gaps, this one *is* fully
+# resolvable with pins alone -- no newer rustc required -- see
+# docs/ROADMAP.md's Phase 14 notes.
+zeroize = "=1.7.0"
+idna_adapter = "=1.1.0"

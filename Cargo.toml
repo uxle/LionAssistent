@@ -26,6 +26,8 @@ members = [
     "crates/plugin-manager",
     "crates/voice",
     "crates/search",
+    "crates/network",
+    "crates/updater",
     "crates/ui",
     "crates/app",
 ]
@@ -65,6 +67,8 @@ example-plugin = { path = "crates/example-plugin" }
 plugin-manager = { path = "crates/plugin-manager" }
 voice = { path = "crates/voice" }
 search = { path = "crates/search" }
+network = { path = "crates/network" }
+updater = { path = "crates/updater" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

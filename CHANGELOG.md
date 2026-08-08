@@ -6,6 +6,16 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 14)
+
+- `network` crate: `HttpClient` (synchronous, matching every other stateful crate in this workspace -- see its doc comment), real `GET`/`POST`+JSON/streaming `download` via `ureq`, backed by the OS's own certificate trust store (`rustls-native-certs`) rather than a compiled-in root list -- see `docs/ROADMAP.md`'s Phase 14 notes for why that distinction mattered in practice, not just in theory, in this sandbox.
+- `network::testing::MockServer`: a ~50-line, std-only, one-request HTTP/1.1 mock server, so `network`'s own tests and `updater`'s never touch the real internet.
+- `updater` crate: `check_for_update`/`download_update`, comparing the running app's version (via `semver`, not string comparison) against a small original JSON manifest format at a pre-configured URL. Never auto-installs -- downloads to disk and stops there; see `docs/ROADMAP.md` for why self-replacing the running binary is out of scope on purpose.
+- `check_for_updates` (`PermissionLevel::ReadOnly`) and `download_update` (`PermissionLevel::Moderate`, requires confirmation under the default `SecurityRules`): real `ToolCategory::PackageManagement` tools. Neither accepts a URL as input -- the manifest URL is fixed at construction time, never something a tool call can redirect.
+- `crates/updater/tests/permission_integration.rs`: proves `check_for_updates` runs without confirmation and `download_update` is genuinely gated (denied under `AlwaysDeny`, proceeds under `AlwaysApproveForTestingOnly`) against a real `PermissionManager`.
+- Deliberately not built: a generic "fetch any URL" tool (broader security surface than anything TCLIS's tool categories call for) and any auto-install/self-update flow (Phase 20's packaging formats are the right place for real updates to flow through).
+- 312/312 tests passing across all 26 non-Slint, non-Candle crates.
+
 ### Added (Phase 13)
 
 - `search` crate: `ranking::score_text` (deterministic, dependency-free relevance scoring), `FileSearchProvider` (wraps Phase 8's real `linux_services::files::search`), `MemorySearchProvider` (wraps Phase 5's real `memory::MemoryStore::search_memory`), `CommandSearchProvider` (indexes Phase 7's registered tools + Phase 10's saved, enabled workflows), `SearchEngine` (the "Global Search" module, merging all three into one ranked list).
