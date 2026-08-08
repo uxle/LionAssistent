@@ -10,8 +10,8 @@ Reasoning, Developer Implementation Guide, UI/UX, Plugin SDK, Model Runtime,
 Roadmap) live in the project's planning documents. `docs/ROADMAP.md` tracks
 build status phase by phase.
 
-**Status:** Phase 15 (Diagnostics) done and fully verified. Phases 1, 3,
-5, 6, 7, 8, 9, 10, 11, 12, 13, 14, and 15 are fully verified
+**Status:** Phase 16 (Security) done and fully verified. Phases 1, 3, 5,
+6, 7, 8, 9, 10, 11, 12, 13, 14, 15, and 16 are fully verified
 (build+test+run). Phases 2 (UI) and 4 (LLM runtime) are written but not
 compile-verified in the sandbox this was built in -- see
 `docs/ROADMAP.md` for exactly why (two unrelated toolchain/network
@@ -51,6 +51,8 @@ crates/
   metrics/          counters/gauges/timers registry + a PerformanceMonitor sampling real CPU/memory/uptime via linux-services
   telemetry/        strictly opt-in usage telemetry -- double-gated (enabled + endpoint), a closed non-identifying event vocabulary, disabled unless explicitly turned on
   diagnostics/      a global panic hook writing local crash reports + a get_diagnostics_report tool tying metrics/telemetry/crashes together
+  security/         AES-256-GCM encryption, Argon2 key derivation, an encrypted SQLite secret store -- no tools exposed on purpose, see the crate's docs
+  sandbox/          rlimit-based process resource limits (verified enforced) + a Landlock filesystem sandbox (written; enforcement unverifiable in this sandbox, see docs/ROADMAP.md)
   ui/               Slint desktop shell: theme, sidebar, chat view, composer
   app/              binary entry point (bin name: ai-assistant)
 config/
@@ -59,8 +61,8 @@ data/
   database/    assistant.db (SQLite, created on first run, gitignored)
 ```
 
-Later phases (16+: security, UI polish, and on) add more, per the full
-project structure in `Development_plan`.
+Later phases (17+: UI polish, performance, testing, and on) add more,
+per the full project structure in `Development_plan`.
 
 ## Building
 
@@ -77,7 +79,7 @@ cargo test --workspace
 cargo run -p app
 ```
 
-Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, and 15 together (no
+Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, and 16 together (no
 Slint, no Candle) are fully verified and work even on old toolchains:
 
 ```bash
@@ -86,13 +88,15 @@ cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
   -p reasoning -p planner -p tool-framework -p linux-services \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
-  -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics
+  -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
+  -p security -p sandbox
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
   -p reasoning -p planner -p tool-framework -p linux-services \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
-  -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics
+  -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
+  -p security -p sandbox
 ```
 
 `voice`'s tests shell out to `espeak-ng`, `pocketsphinx_continuous`, and

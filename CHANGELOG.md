@@ -6,6 +6,13 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 16)
+
+- `security` crate: `MasterKey` (generate / derive from a passphrase via Argon2 / load-or-create a `0600` key file, zeroized on drop, `Debug`-redacted), AES-256-GCM authenticated encryption (`encrypt`/`decrypt`, tamper and wrong-key detection verified by test), `SecureStore` (SQLite-backed, stores only opaque encrypted blobs), and `SecretManager` (the plaintext-in/plaintext-out API on top). `key.rs`'s doc comment is explicit about exactly what the file-backed key scheme does and doesn't protect against -- no overclaiming. Deliberately exposes **no** assistant tool: a secret value becoming visible in a tool result is close to the opposite of storing it encrypted in the first place.
+- `sandbox` crate: `ProcessLimits`/`apply_limits` (CPU time, memory, open files, process count, max file size via POSIX rlimit) -- empirically confirmed enforced in this environment (a child given a 1-second CPU limit and told to spin forever is actually killed, not left running; this is a real, automated test, not a claim). `FilesystemSandbox` (Landlock-based path restriction) is correct, real code that compiled and ran but reported `NotEnforced` in this specific sandbox -- see `docs/ROADMAP.md` for the full investigation. A standalone `examples/filesystem_sandbox_demo.rs` demonstrates it outside the automated suite, since the real call is process-wide and irreversible.
+- Both crates ship with zero assistant tools, deliberately -- this phase is infrastructure ("Enterprise-grade security" as a foundation), not new LLM-facing surface area.
+- 377/377 tests passing across all 31 non-Slint, non-Candle crates.
+
 ### Added (Phase 15)
 
 - `metrics` crate: `MetricsRegistry` (thread-safe counters/gauges/timers, deterministic `BTreeMap`-ordered snapshots) and `PerformanceMonitor` (samples real CPU/memory/uptime/load via Phase 8's `linux_services::system::system_info`, records into the registry, keeps a bounded rolling history). A `run_periodic_sampling` helper exists but isn't started anywhere automatically -- PRD SS3 rules out hidden background behavior.

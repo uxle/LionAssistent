@@ -1,0 +1,12 @@
+[package]
+name = "sandbox"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Process resource limits (rlimit, verified enforced) and a filesystem access sandbox (Landlock; see this crate's docs for this sandbox environment's specific verification limits) -- Development_plan Phase 16 'Sandbox' module."
+
+[dependencies]
+common = { workspace = true }
+tracing = { workspace = true }
+rlimit = "0.10"
+landlock = "0.4"

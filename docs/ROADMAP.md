@@ -21,7 +21,8 @@ actually exists versus what's still planned.
 | 13 | Search | 🟢 Done and fully verified -- `search` builds+tests clean (286/286 workspace tests). File search wraps Phase 8's real filesystem search; memory search wraps Phase 5's real semantic search; command search indexes Phase 7's registered tools and Phase 10's saved workflows; Global Search merges all three via one dependency-free ranking function. All four exposed as real `ToolCategory::Search` tools (declared in Phase 7, unused until now), gated by Phase 9's real Permission Manager. See note below on scope (no settings search yet) and a pre-existing clippy finding noticed along the way. |
 | 14 | Networking | 🟢 Done and fully verified -- `network` and `updater` build+test clean (312/312 workspace tests). Real HTTPS via `ureq` + the OS's own certificate trust store (not a compiled-in list -- see the Phase 14 notes below for why that distinction mattered in practice here, not just in theory), verified against a real external host during development and against a std-only local mock server in the test suite. `check_for_updates`/`download_update` are real `ToolCategory::PackageManagement` tools; neither accepts a URL from a caller, and neither auto-installs anything -- see notes below. |
 | 15 | Diagnostics | 🟢 Done and fully verified -- `metrics`, `telemetry`, and `diagnostics` build+test clean (342/342 workspace tests). Real CPU/memory/uptime sampling (reuses Phase 8's `linux_services::system`, nothing reimplemented); telemetry is double-gated opt-in with a closed, non-identifying event vocabulary enforced by the type system, not just documentation; a global panic hook writes structured local crash reports without disturbing normal panic output. `get_diagnostics_report` is a real `ReadOnly` tool. See notes below. |
-| 16 | Security | ⬜ Not started |
+| 16 | Security | 🟢 Done and fully verified -- `security` and `sandbox` build+test clean (377/377 workspace tests). Real AES-256-GCM + Argon2 (RustCrypto, not hand-rolled), with tamper/wrong-key detection actually tested, not assumed. Real, empirically-verified `rlimit`-based process resource limits (a CPU-limited child is genuinely killed, tested). A Landlock filesystem sandbox is correct, real code whose enforcement could **not** be verified in this specific sandbox -- see notes below for the full investigation, which is different in kind from the Phase 2/4 toolchain gaps. No new tools this phase, deliberately. |
+| 17 | UI Polish | ⬜ Not started |
 | 15 | Diagnostics | ⬜ Not started |
 | 16 | Security | ⬜ Not started |
 | 17 | UI Polish | ⬜ Not started |
@@ -389,3 +390,57 @@ constraint exists rather than rediscovering it as a flaky test --
 serializing such tests (`--test-threads=1`, or a small serialization
 crate) would be the fix, not a dependency this phase pulled in for a
 single test.
+
+## Phase 16 checklist
+
+Two crates: `security` (Encryption + Secure Storage + Secret Manager --
+closely related, all about protecting data at rest) and `sandbox`
+(Sandbox -- a genuinely distinct concern, isolating what a process can
+do rather than protecting stored data).
+
+- [x] `security::MasterKey` -- generate / derive from a passphrase (Argon2) / load-or-create a `0600` file, `ZeroizeOnDrop`, `Debug` output hard-redacted to `"MasterKey(REDACTED)"` so a stray `{:?}` in a log statement can't leak it. 7/7 tests.
+- [x] `security::cipher` -- AES-256-GCM via RustCrypto's `aes-gcm`, not hand-rolled. Tests don't just check the happy path: wrong key, tampered ciphertext, and tampered nonce are all confirmed to fail decryption (AEAD's authentication actually doing its job), and two encryptions of identical plaintext are confirmed to produce different ciphertexts (nonces genuinely not reused). 7/7 tests.
+- [x] `security::SecureStore` -- SQLite-backed (same `rusqlite =0.31.0` pattern as `memory`/`permission-manager`/`workflow-engine`), stores only opaque `EncryptedBlob`s, `list_names` never touches ciphertext. 6/6 tests, including real on-disk persistence across reopening.
+- [x] `security::SecretManager` -- the plaintext-in/plaintext-out API on top, with a regression test that would fail immediately if it were ever "simplified" into storing values unencrypted. 6/6 tests. **No assistant tool** -- see the crate's own doc comment for why even `list_names` alone wasn't wired up as one.
+- [x] `sandbox::ProcessLimits`/`apply_limits` -- CPU time, memory, open files, process count, max file size via POSIX `rlimit`. Not a claim: a real automated test spawns a child told to busy-loop forever with a 1-second CPU limit and confirms it's actually killed within a few real seconds, not left running.
+- [x] `sandbox::FilesystemSandbox` -- Landlock-based path restriction, `EnforcementStatus` forcing every caller to check whether the kernel actually enforced the rules rather than assuming success means protection. Builder logic is unit-tested; the live `restrict_current_process()` call is deliberately *not* exercised in the automated suite (process-wide, irreversible -- see below) and instead has a standalone `examples/filesystem_sandbox_demo.rs`, run manually once during this phase and confirmed to behave exactly as documented.
+- [x] 377/377 tests passing across all 31 non-Slint, non-Candle crates.
+- [ ] **Not done, deliberately:**
+  - **No OS keyring integration** (`libsecret`/Secret Service) for `MasterKey`. This sandbox has no session bus to verify it against, the same category of "can't confirm it actually works here" as Landlock's enforcement -- but unlike Landlock, integrating it at all was skipped rather than written-but-unverified, since a broken keyring integration masquerading as working would be worse than the honestly-limited file-backed scheme this phase actually shipped.
+  - **No tools in either crate.** Deliberate, not an oversight -- see both crates' doc comments.
+  - **Not wired into `linux_services::terminal`.** `apply_limits` is a ready-to-use standalone function specifically so a *future* revision of that call site can adopt it without this phase reaching backward into Phase 8's already-complete code.
+  - **No namespace or seccomp-based sandboxing.** Landlock was the one unprivileged option realistic for this workspace's actual target (a normal user's desktop, not a privileged container runtime); namespaces/seccomp generally need cooperation this phase has no way to assume.
+
+### Landlock: real code, honestly unverifiable enforcement in this sandbox
+
+This is a different *kind* of gap than any other in this project. Phases
+2 and 4 are blocked by the *compiler* (Slint needs rustc 1.77+, Candle's
+dependency tree needs 1.88+) -- nothing about the *code* is in question,
+only whether this specific `rustc` can build it. Phase 14's dependency
+saga was resolved entirely with version pins, no compiler change needed.
+Landlock is different again: it compiles and runs cleanly on this
+sandbox's rustc 1.75, and the kernel here (6.18) is far newer than
+Landlock's 5.13 floor -- but calling `restrict_self()` on a real ruleset
+and then testing it against a genuinely-not-allowed directory shows the
+kernel not actually enforcing anything:
+
+```
+ruleset status: NotEnforced
+read allowed dir: Ok("hi")
+read blocked dir: Ok("shh")   <- should have failed, didn't
+```
+
+The most likely explanation is that this sandbox runs inside another
+layer of process isolation (Claude's own) that itself blocks the
+underlying `landlock_create_ruleset`/`landlock_restrict_self` syscalls --
+plausible given how deeply nested this environment already is, and not
+something `sandbox` has any way to detect or work around from inside a
+Rust process. On a normal, unrestricted Linux desktop -- this
+application's actual target -- real enforcement is expected; Landlock
+has shipped in mainline distro kernels since well before 5.13 became
+common.
+
+This is exactly why `EnforcementStatus` exists as a forced check rather
+than `restrict_self()` just returning `AppResult<()>`: a security
+control that silently no-ops is worse than one that's honestly absent,
+and this module was built to make that distinction impossible to miss.

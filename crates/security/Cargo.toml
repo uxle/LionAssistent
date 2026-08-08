@@ -1,0 +1,25 @@
+[package]
+name = "security"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Encryption, secure storage, and a secret manager (Development_plan Phase 16 'Encryption'/'Secure Storage'/'Secret Manager' modules). No tools exposed on purpose -- see this crate's docs before adding one."
+
+[dependencies]
+common = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+rusqlite = { version = "=0.31.0", features = ["bundled"] }
+chrono = { workspace = true }
+aes-gcm = "0.10"
+argon2 = "0.5"
+zeroize = { version = "=1.7.0", features = ["derive"] }
+zeroize_derive = "=1.4.2"
+
+# Pin required to build on this workspace's rustc 1.75 floor, matching
+# the `uuid`/`rusqlite`/`network`-crate precedent: the latest `base64ct`
+# (pulled in transitively via argon2's `password-hash`) needs Cargo's
+# `edition2024` resolver, which needs a much newer Cargo than 1.75
+# ships. A pin, not a newer rustc, is the whole fix -- see
+# docs/ROADMAP.md's Phase 16 notes.
+base64ct = "=1.6.0"
