@@ -6,5 +6,9 @@
 fn main() -> Result<(), slint::PlatformError> {
     let runtime = tokio::runtime::Runtime::new().expect("failed to start Tokio runtime");
     let _guard = runtime.enter();
-    ui::run(event_bus::EventBus::default(), common::Id::new())
+    ui::run(
+        event_bus::EventBus::default(),
+        common::Id::new(),
+        &config::UiConfig::default(),
+    )
 }

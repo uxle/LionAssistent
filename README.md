@@ -10,12 +10,15 @@ Reasoning, Developer Implementation Guide, UI/UX, Plugin SDK, Model Runtime,
 Roadmap) live in the project's planning documents. `docs/ROADMAP.md` tracks
 build status phase by phase.
 
-**Status:** Phase 16 (Security) done and fully verified. Phases 1, 3, 5,
-6, 7, 8, 9, 10, 11, 12, 13, 14, 15, and 16 are fully verified
-(build+test+run). Phases 2 (UI) and 4 (LLM runtime) are written but not
-compile-verified in the sandbox this was built in -- see
-`docs/ROADMAP.md` for exactly why (two unrelated toolchain/network
-limits, not code problems) and what to do about it.
+**Status:** Phase 17 (UI Polish) written; mostly not compile-verified, by
+explicit choice -- see `docs/ROADMAP.md`'s Phase 17 notes for a much
+deeper investigation of the Slint blocker than earlier phases documented,
+and why it's a bigger wall than the dependency-pin fixes that resolved
+Phases 14/16. Phases 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, and 16
+are fully verified (build+test+run); Phase 17's `config::UiConfig`
+additions join that list (real, compiled, tested Rust with no Slint
+dependency) while everything touching `.slint` files or `ui/src/`
+remains unverified, same as Phase 2 always has been.
 
 ## Workspace layout
 
@@ -53,7 +56,7 @@ crates/
   diagnostics/      a global panic hook writing local crash reports + a get_diagnostics_report tool tying metrics/telemetry/crashes together
   security/         AES-256-GCM encryption, Argon2 key derivation, an encrypted SQLite secret store -- no tools exposed on purpose, see the crate's docs
   sandbox/          rlimit-based process resource limits (verified enforced) + a Landlock filesystem sandbox (written; enforcement unverifiable in this sandbox, see docs/ROADMAP.md)
-  ui/               Slint desktop shell: theme, sidebar, chat view, composer
+  ui/               Slint desktop shell: theme, sidebar, chat view, composer, animations, accessibility (Phase 17)
   app/              binary entry point (bin name: ai-assistant)
 config/
   default.toml default configuration loaded at startup

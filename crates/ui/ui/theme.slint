@@ -1,23 +1,109 @@
-// Design tokens (UI-UX SS3). Kept intentionally small for Phase 2 --
-// expand toward the full token set (typography scale, shadows, full
-// border/radius variants) in Phase 17 "UI Polish".
+// Design tokens (UI-UX SS3). Phase 2 kept this intentionally small; this
+// is the expansion Phase 2's own comment already promised: the full
+// typography scale, shadow levels, and border-radius variants, plus the
+// semantic status colors and the accessibility/motion tokens UI-UX
+// SS13/SS15 call for (reduced motion, high contrast, adjustable text
+// scale). Wiring `motion-enabled`/`high-contrast`/`text-scale` to real
+// values happens on the Rust side (`ui::run`, from `config::UiConfig`)
+// -- see that function's doc comment. Like every other `.slint` file in
+// this crate, this is written against Slint's documented language and
+// widget APIs but has never been compile-verified in this sandbox
+// (Phase 2's original gap; see docs/ROADMAP.md's Phase 17 notes).
 export global Palette {
     in-out property <bool> dark: true;
+
+    // UI-UX SS13 "high contrast support": when true, every color below
+    // widens its contrast against window-bg rather than using the
+    // normal dark/light pair. A blunt but honest implementation -- a
+    // real design pass would tune each color individually; this at
+    // least guarantees text and borders don't stay at low-contrast
+    // values when the user has asked for the opposite.
+    in-out property <bool> high-contrast: false;
 
     out property <color> window-bg: dark ? #1e1e2e : #f7f7fb;
     out property <color> surface: dark ? #262637 : #ffffff;
     out property <color> sidebar-bg: dark ? #181822 : #eceef3;
     out property <color> nav-active-bg: dark ? #2f2f52 : #e4e1fb;
-    out property <color> text-primary: dark ? #f2f2f7 : #1c1c26;
-    out property <color> text-secondary: dark ? #a0a0b8 : #6b6b80;
-    out property <color> border-color: dark ? #33334a : #dcdce6;
+    out property <color> text-primary: high-contrast
+        ? (dark ? #ffffff : #000000)
+        : (dark ? #f2f2f7 : #1c1c26);
+    out property <color> text-secondary: high-contrast
+        ? (dark ? #e0e0e0 : #202020)
+        : (dark ? #a0a0b8 : #6b6b80);
+    out property <color> border-color: high-contrast
+        ? (dark ? #ffffff : #000000)
+        : (dark ? #33334a : #dcdce6);
     out property <color> accent: #7c6cf0;
     out property <color> user-bubble: dark ? #3a3a54 : #e4e1fb;
     out property <color> assistant-bubble: dark ? #2c2c40 : #ffffff;
     out property <color> system-bubble: dark ? #202030 : #eeeef4;
 
+    // UI-UX SS3 "Primary" semantic colors -- success/warning/error/info,
+    // kept legible on both themes rather than a single fixed hue.
+    out property <color> success: dark ? #4ade80 : #16a34a;
+    out property <color> warning: dark ? #fbbf24 : #b45309;
+    out property <color> error: dark ? #f87171 : #dc2626;
+    out property <color> info: dark ? #60a5fa : #2563eb;
+
+    out property <length> radius-sm: 4px;
     out property <length> radius-md: 10px;
+    out property <length> radius-lg: 16px;
+    out property <length> radius-xl: 24px;
+    out property <length> radius-pill: 9999px;
+
     out property <length> space-sm: 8px;
     out property <length> space-md: 16px;
     out property <length> space-lg: 24px;
+
+    // UI-UX SS13 "adjustable text scaling" (config::UiConfig::effective_text_scale,
+    // already clamped to 0.8..2.0 before it ever reaches here). Every
+    // font-size in this crate should be multiplied by this rather than
+    // hardcoded, so the whole UI scales together.
+    in-out property <float> text-scale: 1.0;
+
+    // Typography scale (UI-UX SS3), each already multiplied by
+    // text-scale so call sites never need to remember to apply it
+    // themselves.
+    out property <length> font-display: 28px * text-scale;
+    out property <length> font-heading-1: 22px * text-scale;
+    out property <length> font-heading-2: 18px * text-scale;
+    out property <length> font-title: 16px * text-scale;
+    out property <length> font-body: 14px * text-scale;
+    out property <length> font-caption: 12px * text-scale;
+    out property <length> font-label: 12px * text-scale;
+    out property <length> font-code: 13px * text-scale;
+
+    // Shadow levels (UI-UX SS3) as ready-to-use `drop-shadow-*` triples.
+    // Slint's `Rectangle` shadow properties don't group into a single
+    // token the way `color`/`length` do, so these are exposed per
+    // component (`shadow-md-blur`, etc.) rather than one opaque value --
+    // a caller sets all three `drop-shadow-*` properties from the
+    // matching trio.
+    out property <length> shadow-sm-blur: 4px;
+    out property <length> shadow-sm-y: 1px;
+    out property <length> shadow-md-blur: 10px;
+    out property <length> shadow-md-y: 4px;
+    out property <length> shadow-lg-blur: 20px;
+    out property <length> shadow-lg-y: 8px;
+    out property <length> shadow-floating-blur: 32px;
+    out property <length> shadow-floating-y: 12px;
+    out property <color> shadow-color: dark ? #00000080 : #00000033;
+}
+
+// UI-UX SS15 "use subtle animations only... short duration, interruptible,
+// respect reduced-motion settings". A single source of truth for
+// durations, so every `animate` block in `app-window.slint` reads
+// `Motion.duration-fast` etc. instead of a literal that would need
+// updating in a dozen places if the reduced-motion story ever changes.
+// `config::effective_duration_ms`-equivalent logic (zero everything when
+// reduced motion is on) is expressed directly here rather than shared
+// with a Rust helper, since Slint expressions can't call into Rust
+// functions -- see `preferences`-related notes in docs/ROADMAP.md.
+export global Motion {
+    in-out property <bool> reduced: false;
+
+    out property <duration> duration-fast: reduced ? 0ms : 100ms;
+    out property <duration> duration-normal: reduced ? 0ms : 200ms;
+    out property <duration> duration-slow: reduced ? 0ms : 350ms;
+    out property <easing> standard-easing: cubic-bezier(0.4, 0.0, 0.2, 1.0);
 }

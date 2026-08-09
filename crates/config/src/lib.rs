@@ -29,11 +29,28 @@ impl Default for ModelConfig {
     }
 }
 
+/// UI-UX SS13 "adjustable text scaling" -- bounded so a bad or
+/// hand-edited config value can't render the app unreadably tiny or
+/// unusably huge. `0.8`..`2.0` covers "a bit smaller" through "double
+/// size" without either extreme.
+pub const MIN_TEXT_SCALE: f32 = 0.8;
+pub const MAX_TEXT_SCALE: f32 = 2.0;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UiConfig {
     pub theme: String,
     pub language: String,
+    /// UI-UX SS15 "reduced motion option": when true, `ui`'s Slint side
+    /// (Phase 17) treats every `animate` duration as `0ms`.
+    pub reduced_motion: bool,
+    /// UI-UX SS13 "high contrast support".
+    pub high_contrast: bool,
+    /// Not necessarily already in the safe `0.8..=2.0` range -- e.g. a
+    /// config file hand-edited, or written by a future version of this
+    /// app with a different valid range. See
+    /// [`UiConfig::effective_text_scale`] for what actually gets applied.
+    pub text_scale: f32,
 }
 
 impl Default for UiConfig {
@@ -41,7 +58,24 @@ impl Default for UiConfig {
         Self {
             theme: "dark".to_string(),
             language: "en".to_string(),
+            reduced_motion: false,
+            high_contrast: false,
+            text_scale: 1.0,
         }
+    }
+}
+
+impl UiConfig {
+    /// `text_scale`, clamped to `MIN_TEXT_SCALE..=MAX_TEXT_SCALE` (or the
+    /// default, `1.0`, if it's not even a real number). Doesn't mutate
+    /// `text_scale` itself -- only what's actually applied is bounded,
+    /// so an out-of-range value already on disk isn't silently rewritten
+    /// out from under whatever wrote it there.
+    pub fn effective_text_scale(&self) -> f32 {
+        if self.text_scale.is_nan() {
+            return UiConfig::default().text_scale;
+        }
+        self.text_scale.clamp(MIN_TEXT_SCALE, MAX_TEXT_SCALE)
     }
 }
 
@@ -107,6 +141,46 @@ mod tests {
         let cfg = Config::default();
         assert_eq!(cfg.model.active_model, "gemma-3-1b");
         assert_eq!(cfg.ui.theme, "dark");
+        assert!(!cfg.ui.reduced_motion);
+        assert!(!cfg.ui.high_contrast);
+        assert_eq!(cfg.ui.effective_text_scale(), 1.0);
+    }
+
+    #[test]
+    fn text_scale_within_range_is_used_unchanged() {
+        let ui = UiConfig {
+            text_scale: 1.4,
+            ..UiConfig::default()
+        };
+        assert_eq!(ui.effective_text_scale(), 1.4);
+    }
+
+    #[test]
+    fn text_scale_above_the_max_is_clamped_without_mutating_the_stored_value() {
+        let ui = UiConfig {
+            text_scale: 5.0,
+            ..UiConfig::default()
+        };
+        assert_eq!(ui.effective_text_scale(), MAX_TEXT_SCALE);
+        assert_eq!(ui.text_scale, 5.0, "raw stored value should be untouched");
+    }
+
+    #[test]
+    fn text_scale_below_the_min_is_clamped() {
+        let ui = UiConfig {
+            text_scale: 0.1,
+            ..UiConfig::default()
+        };
+        assert_eq!(ui.effective_text_scale(), MIN_TEXT_SCALE);
+    }
+
+    #[test]
+    fn nan_text_scale_falls_back_to_the_default_rather_than_propagating() {
+        let ui = UiConfig {
+            text_scale: f32::NAN,
+            ..UiConfig::default()
+        };
+        assert_eq!(ui.effective_text_scale(), UiConfig::default().text_scale);
     }
 
     #[test]
@@ -122,10 +196,34 @@ mod tests {
 
         let mut cfg = Config::default();
         cfg.ui.theme = "light".to_string();
+        cfg.ui.reduced_motion = true;
+        cfg.ui.text_scale = 1.5;
         cfg.save(&path).unwrap();
 
         let loaded = Config::load(&path).unwrap();
         assert_eq!(loaded.ui.theme, "light");
+        assert!(loaded.ui.reduced_motion);
+        assert_eq!(loaded.ui.text_scale, 1.5);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_config_file_written_before_phase_17_still_loads_with_sane_defaults() {
+        // Simulates a real, pre-existing config.toml that predates
+        // reduced_motion/high_contrast/text_scale entirely -- the whole
+        // point of `#[serde(default)]` at the container level (every
+        // absent field falls back individually, not just the whole
+        // struct at once).
+        let dir = std::env::temp_dir().join(format!("ai-assistant-test-{}", common::Id::new()));
+        let path = dir.join("config.toml");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, "[ui]\ntheme = \"light\"\nlanguage = \"en\"\n").unwrap();
+
+        let loaded = Config::load(&path).unwrap();
+        assert_eq!(loaded.ui.theme, "light");
+        assert!(!loaded.ui.reduced_motion);
+        assert_eq!(loaded.ui.effective_text_scale(), 1.0);
 
         std::fs::remove_dir_all(&dir).ok();
     }

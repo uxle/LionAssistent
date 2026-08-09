@@ -9,6 +9,12 @@ max_tokens = 1024
 [ui]
 theme = "dark"
 language = "en"
+# Phase 17 (UI-UX SS13/SS15): reduced_motion / high_contrast / text_scale
+# (0.8-2.0). Any value out of range is clamped when applied, not
+# rejected -- see config::UiConfig::effective_text_scale.
+reduced_motion = false
+high_contrast = false
+text_scale = 1.0
 
 enabled_tools = ["system_info", "open_application", "list_directory"]
 enabled_plugins = []

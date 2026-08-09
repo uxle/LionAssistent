@@ -6,6 +6,14 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 17)
+
+- `config::UiConfig`: `reduced_motion`, `high_contrast`, `text_scale` (clamped `0.8..=2.0` via `effective_text_scale()`) -- real, compiled, tested Rust (`config` has no Slint dependency). 8/8 tests, including backward compatibility with a config file written before these fields existed.
+- `theme.slint`: the full typography scale, shadow levels, complete radius variants, and semantic status colors Phase 2's own comment already flagged as deferred here, plus `Palette.high-contrast`/`text-scale` and a new `Motion` global for reduced-motion-aware animation tokens.
+- `app-window.slint`: a reusable `Activatable` component (real keyboard focus + activation + focus ring, not pointer-only); `accessible-role`/`accessible-label` throughout; a responsive sidebar collapse; a `ThinkingIndicator`; and a switch from `ScrollView`+`for` to Slint's own `ListView` for the message list (UI-UX SS18 "efficient rendering of long conversations").
+- `ui::run` gained a `&config::UiConfig` parameter and a `waiting` property driving the new thinking indicator around the send/receive flow.
+- **Explicitly not compile-verified**, by Lion's direct choice after a much deeper re-investigation of the Slint blocker than previous phases documented -- see `docs/ROADMAP.md`'s Phase 17 notes for the full nine-attempt investigation and why it's a materially bigger wall than the dependency-pin fixes that worked in Phases 14/16. 382/382 tests still passing across every crate that *can* be verified.
+
 ### Added (Phase 16)
 
 - `security` crate: `MasterKey` (generate / derive from a passphrase via Argon2 / load-or-create a `0600` key file, zeroized on drop, `Debug`-redacted), AES-256-GCM authenticated encryption (`encrypt`/`decrypt`, tamper and wrong-key detection verified by test), `SecureStore` (SQLite-backed, stores only opaque encrypted blobs), and `SecretManager` (the plaintext-in/plaintext-out API on top). `key.rs`'s doc comment is explicit about exactly what the file-backed key scheme does and doesn't protect against -- no overclaiming. Deliberately exposes **no** assistant tool: a secret value becoming visible in a tool result is close to the opposite of storing it encrypted in the first place.

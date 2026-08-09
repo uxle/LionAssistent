@@ -11,6 +11,7 @@ slint-build = "1"
 [dependencies]
 common = { workspace = true }
 event-bus = { workspace = true }
+config = { workspace = true }
 chrono = { workspace = true }
 tokio = { workspace = true }
 slint = "1"

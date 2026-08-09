@@ -1,5 +1,5 @@
-import { Palette } from "theme.slint";
-import { LineEdit, ScrollView } from "std-widgets.slint";
+import { Palette, Motion } from "theme.slint";
+import { LineEdit, ListView } from "std-widgets.slint";
 
 // Chat message model (DBDMS "Messages" table, trimmed to what the UI
 // needs). `role` is "user" | "assistant" | "system".
@@ -7,6 +7,43 @@ export struct ChatMessage {
     role: string,
     content: string,
     time: string,
+}
+
+// A keyboard-and-pointer-activatable control (UI-UX SS13 "keyboard
+// navigation... focus indicators"). `TouchArea` alone only handles
+// pointer input; wrapping it in `FocusScope` adds Tab-reachable keyboard
+// focus and Enter/Space activation, and gives every caller below a
+// visible focus ring for free instead of reimplementing one per
+// control. `has-hover` forwards the internal `TouchArea`'s state as a
+// property of `Activatable` itself, rather than callers reaching past
+// it into a named child element -- Slint components shouldn't expose
+// their internals like that.
+component Activatable inherits FocusScope {
+    callback activated;
+    out property <bool> has-hover: area.has-hover;
+
+    key-pressed(event) => {
+        if (event.text == " " || event.text == "\n") {
+            root.activated();
+            accept
+        } else {
+            reject
+        }
+    }
+
+    area := TouchArea {
+        clicked => { root.activated(); }
+    }
+
+    // Focus indicator (UI-UX SS13): a visible ring only while this
+    // control actually has keyboard focus, not on every hover/click --
+    // mouse users already get feedback from the content underneath.
+    Rectangle {
+        border-width: root.has-focus ? 2px : 0px;
+        border-color: Palette.accent;
+        border-radius: parent.border-radius;
+        animate border-width { duration: Motion.duration-fast; }
+    }
 }
 
 component NavItem inherits Rectangle {
@@ -17,9 +54,13 @@ component NavItem inherits Rectangle {
     height: 40px;
     border-radius: Palette.radius-md;
     background: active ? Palette.nav-active-bg : transparent;
+    animate background { duration: Motion.duration-fast; easing: Motion.standard-easing; }
 
-    TouchArea {
-        clicked => { root.clicked(); }
+    Activatable {
+        accessible-role: tab;
+        accessible-label: root.label;
+        accessible-checked: root.active;
+        activated => { root.clicked(); }
     }
 
     HorizontalLayout {
@@ -28,8 +69,10 @@ component NavItem inherits Rectangle {
         Text {
             text: root.label;
             color: active ? Palette.accent : Palette.text-primary;
+            font-size: Palette.font-body;
             font-weight: active ? 600 : 400;
             vertical-alignment: center;
+            animate color { duration: Motion.duration-fast; }
         }
     }
 }
@@ -37,20 +80,27 @@ component NavItem inherits Rectangle {
 // Primary navigation (UI-UX SS6): Chat, History, Memory, Workflows,
 // Plugins, Settings. Only "Chat" is functional in Phase 2 -- the rest are
 // wired for navigation but land their real content in later phases.
+//
+// Responsive (UI-UX SS14): below the breakpoint (see `AppWindow.narrow`),
+// this narrows rather than the layout breaking or requiring horizontal
+// scrolling -- "minimum usable layout maintained," not a vanishing
+// sidebar.
 component Sidebar inherits Rectangle {
     in-out property <string> selected: "Chat";
+    in property <bool> collapsed: false;
     callback nav-selected(string);
 
-    width: 220px;
+    width: collapsed ? 120px : 220px;
+    animate width { duration: Motion.duration-normal; easing: Motion.standard-easing; }
     background: Palette.sidebar-bg;
 
     VerticalLayout {
         padding: Palette.space-md;
         spacing: Palette.space-sm;
 
-        Text {
+        if !root.collapsed: Text {
             text: "Local AI Assistant";
-            font-size: 16px;
+            font-size: Palette.font-title;
             font-weight: 700;
             color: Palette.text-primary;
         }
@@ -58,6 +108,14 @@ component Sidebar inherits Rectangle {
         Rectangle { height: Palette.space-md; }
 
         for item-name in ["Chat", "History", "Memory", "Workflows", "Plugins", "Settings"]: NavItem {
+            // Collapsed: same label text, just a narrower row -- safer
+            // than deriving an abbreviation (no icon set exists yet to
+            // fall back on instead, and string-manipulation-in-Slint
+            // isn't something this pass is confident enough about to
+            // rely on unverified). Text simply clips/wraps at the
+            // narrower width; a real icon-only rail is a natural
+            // follow-up once this crate can actually be compiled and
+            // tuned visually.
             label: item-name;
             active: item-name == root.selected;
             clicked => {
@@ -71,13 +129,24 @@ component Sidebar inherits Rectangle {
 }
 
 // One chat bubble, styled per role (UI-UX SS8: User / Assistant / System).
+// Owns its own vertical margin and horizontal padding directly (rather
+// than relying on a parent layout's `spacing`/`padding`) so it drops
+// into a `ListView` cleanly -- see `AppWindow`'s doc comment on why the
+// message list uses `ListView` instead of the `ScrollView`+`for` Phase 2
+// shipped with.
 component MessageBubble inherits Rectangle {
     in property <ChatMessage> message;
 
     property <bool> is-user: message.role == "user";
     property <bool> is-system: message.role == "system";
 
+    height: content.preferred-height + Palette.space-sm * 2;
+
     HorizontalLayout {
+        padding-left: Palette.space-md;
+        padding-right: Palette.space-md;
+        padding-top: Palette.space-sm / 2;
+        padding-bottom: Palette.space-sm / 2;
         alignment: is-user ? end : start;
 
         Rectangle {
@@ -86,23 +155,93 @@ component MessageBubble inherits Rectangle {
             background: is-system ? Palette.system-bubble : is-user ? Palette.user-bubble : Palette.assistant-bubble;
             border-width: is-system ? 0px : 1px;
             border-color: Palette.border-color;
+            drop-shadow-color: Palette.shadow-color;
+            drop-shadow-blur: Palette.shadow-sm-blur;
+            drop-shadow-offset-y: Palette.shadow-sm-y;
 
-            VerticalLayout {
+            accessible-role: text;
+            accessible-label: (is-system ? "System" : is-user ? "You" : "Assistant") + " said: " + message.content;
+
+            content := VerticalLayout {
                 padding: Palette.space-sm;
                 spacing: 4px;
 
                 Text {
                     text: message.content;
                     color: Palette.text-primary;
+                    font-size: Palette.font-body;
                     wrap: word-wrap;
                     font-italic: is-system;
                 }
                 Text {
                     text: message.time;
                     color: Palette.text-secondary;
-                    font-size: 11px;
+                    font-size: Palette.font-caption;
                 }
             }
+        }
+    }
+}
+
+// UI-UX SS15 "loading shimmer": a minimal, subtle stand-in for a real
+// typing indicator while waiting on a response -- three dots that pulse
+// in a staggered sequence. Driven by a `Timer` toggling a property
+// rather than the `animate` block's own repeat/direction sub-properties
+// (`iteration-count`, `direction: alternate`) -- those may well exist in
+// Slint's real animate syntax, but this pass isn't confident enough
+// about their exact form to rely on unverified, where a `Timer` +
+// ordinary `animate <property> { duration: ...; }` (the same pattern
+// already used throughout this file, e.g. `Sidebar`'s width) is safer
+// to get right blind. Respects reduced motion by simply not toggling
+// (the dots stay at their initial opacity, still visible) rather than
+// disappearing, since "assistant is thinking" is real information, not
+// decoration.
+component ThinkingIndicator inherits Rectangle {
+    height: 32px;
+    accessible-role: text;
+    accessible-label: "Assistant is thinking";
+
+    property <bool> pulse: false;
+    Timer {
+        interval: 500ms;
+        running: !Motion.reduced;
+        triggered => { root.pulse = !root.pulse; }
+    }
+
+    HorizontalLayout {
+        padding-left: Palette.space-md;
+        alignment: start;
+        spacing: 4px;
+
+        // Three dots, written out explicitly rather than a `for` loop
+        // over an index -- alternating each one's phase needs either a
+        // modulo/parity check this pass isn't confident is valid Slint
+        // syntax, or this: three near-identical blocks, each just
+        // reading `pulse` or `!pulse` directly. Slightly repetitive,
+        // meaningfully safer to get right unverified.
+        Rectangle {
+            width: 6px;
+            height: 6px;
+            border-radius: 3px;
+            background: Palette.text-secondary;
+            opacity: pulse ? 1.0 : 0.4;
+            animate opacity { duration: Motion.duration-slow; easing: Motion.standard-easing; }
+        }
+        Rectangle {
+            width: 6px;
+            height: 6px;
+            border-radius: 3px;
+            background: Palette.text-secondary;
+            opacity: pulse ? 0.4 : 1.0;
+            animate opacity { duration: Motion.duration-slow; easing: Motion.standard-easing; }
+        }
+        Rectangle {
+            width: 6px;
+            height: 6px;
+            border-radius: 3px;
+            background: Palette.text-secondary;
+            opacity: pulse ? 1.0 : 0.4;
+            animate opacity { duration: Motion.duration-slow; easing: Motion.standard-easing; }
         }
     }
 }
@@ -127,19 +266,23 @@ component Composer inherits Rectangle {
             input := LineEdit {
                 placeholder-text: "Message the assistant...";
                 horizontal-stretch: 1;
+                accessible-label: "Message the assistant";
                 accepted(text) => {
                     root.send(text);
                     self.text = "";
                 }
             }
 
-            Rectangle {
+            send-button := Rectangle {
                 width: 80px;
                 border-radius: Palette.radius-md;
-                background: Palette.accent;
+                background: send-area.has-focus || send-area.has-hover ? Palette.accent.darker(10%) : Palette.accent;
+                animate background { duration: Motion.duration-fast; }
 
-                TouchArea {
-                    clicked => {
+                send-area := Activatable {
+                    accessible-role: button;
+                    accessible-label: "Send message";
+                    activated => {
                         root.send(input.text);
                         input.text = "";
                     }
@@ -148,6 +291,7 @@ component Composer inherits Rectangle {
                 Text {
                     text: "Send";
                     color: white;
+                    font-size: Palette.font-body;
                     horizontal-alignment: center;
                     vertical-alignment: center;
                 }
@@ -161,9 +305,20 @@ export component AppWindow inherits Window {
     width: 960px;
     height: 640px;
     background: Palette.window-bg;
+    animate background { duration: Motion.duration-normal; }
 
     in-out property <[ChatMessage]> messages: [];
+    // UI-UX SS15 loading shimmer / assistant-thinking state -- set by
+    // `ui::run` between publishing `Event::UserMessageReceived` and
+    // receiving the matching `Event::ResponseGenerated`.
+    in-out property <bool> waiting: false;
     callback send-message(string);
+
+    // UI-UX SS14 responsive breakpoint: below this width, the sidebar
+    // collapses to an icon rail rather than the layout breaking or
+    // requiring horizontal scrolling. 700px keeps the chat column
+    // usable even at the narrowest still-reasonable desktop width.
+    property <bool> narrow: root.width < 700px;
 
     VerticalLayout {
         // Header
@@ -175,8 +330,9 @@ export component AppWindow inherits Window {
                 HorizontalLayout {
                     padding: Palette.space-md;
                     Text {
-                        text: "Local Linux AI Assistant -- Phase 2";
+                        text: "Local Linux AI Assistant";
                         color: Palette.text-primary;
+                        font-size: Palette.font-title;
                         font-weight: 700;
                         vertical-alignment: center;
                         horizontal-stretch: 1;
@@ -186,12 +342,17 @@ export component AppWindow inherits Window {
                         border-radius: Palette.radius-md;
                         border-width: 1px;
                         border-color: Palette.border-color;
-                        TouchArea {
-                            clicked => { Palette.dark = !Palette.dark; }
+
+                        Activatable {
+                            accessible-role: button;
+                            accessible-label: Palette.dark ? "Switch to light mode" : "Switch to dark mode";
+                            activated => { Palette.dark = !Palette.dark; }
                         }
+
                         Text {
                             text: Palette.dark ? "Light mode" : "Dark mode";
                             color: Palette.text-primary;
+                            font-size: Palette.font-body;
                             horizontal-alignment: center;
                             vertical-alignment: center;
                         }
@@ -206,19 +367,30 @@ export component AppWindow inherits Window {
         }
 
         HorizontalLayout {
-            Sidebar { }
+            Sidebar {
+                collapsed: root.narrow;
+            }
 
             VerticalLayout {
-                ScrollView {
+                // `ListView` (not the `ScrollView`+`VerticalLayout`+`for`
+                // Phase 2 shipped with) -- UI-UX SS18 "efficient
+                // rendering of long conversations... lazy loading for
+                // large histories": `ListView` is Slint's own
+                // list-virtualization widget, built for exactly this,
+                // rather than laying out every message eagerly. Its
+                // content here is only the `for` -- `ThinkingIndicator`
+                // sits outside it, as an ordinary sibling, rather than
+                // mixed in alongside the list items: this pass isn't
+                // fully confident `ListView` supports arbitrary
+                // non-list-item children the way a plain layout would.
+                ListView {
                     vertical-stretch: 1;
-                    VerticalLayout {
-                        padding: Palette.space-md;
-                        spacing: Palette.space-sm;
-                        for msg in root.messages: MessageBubble {
-                            message: msg;
-                        }
+                    for msg in root.messages: MessageBubble {
+                        message: msg;
                     }
                 }
+
+                if root.waiting: ThinkingIndicator {}
 
                 Composer {
                     send(text) => { root.send-message(text); }
