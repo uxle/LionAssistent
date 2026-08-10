@@ -65,6 +65,26 @@ pub struct MetricsSnapshot {
     pub timers: BTreeMap<String, TimerSummary>,
 }
 
+impl MetricsSnapshot {
+    /// The `n` timers with the highest average duration, slowest first
+    /// -- e.g. for a Development_plan Phase 18 "Startup Optimization"
+    /// report answering "where did startup time actually go", built on
+    /// [`MetricsRegistry::time`]'s per-phase timers rather than a
+    /// separate startup-specific data structure. Ties break by name for
+    /// deterministic output, matching `MetricsSnapshot`'s own
+    /// `BTreeMap`-ordered fields.
+    pub fn slowest_timers(&self, n: usize) -> Vec<(&str, TimerSummary)> {
+        let mut entries: Vec<(&str, TimerSummary)> = self
+            .timers
+            .iter()
+            .map(|(name, summary)| (name.as_str(), *summary))
+            .collect();
+        entries.sort_by(|a, b| b.1.avg_ms.total_cmp(&a.1.avg_ms).then_with(|| a.0.cmp(b.0)));
+        entries.truncate(n);
+        entries
+    }
+}
+
 /// Thread-safe metrics storage: any number of readers and writers from
 /// any thread, matching how tool execution actually happens in this
 /// workspace (`ToolRouter::execute` runs each tool via `spawn_blocking`
@@ -101,6 +121,23 @@ impl MetricsRegistry {
     pub fn record_duration(&self, name: &str, duration: Duration) {
         let mut timers = self.timers.write().expect("metrics timers lock poisoned");
         timers.entry(name.to_string()).or_default().record(duration);
+    }
+
+    /// Times `f`, records the elapsed wall time under `name` via
+    /// [`MetricsRegistry::record_duration`], and returns `f`'s result --
+    /// Development_plan Phase 18 "Startup Optimization"'s instrumentation
+    /// primitive, letting a real caller (`app`'s startup sequence, one
+    /// call per phase: config load, backend load, memory open) find out
+    /// where its own time actually goes instead of guessing. Reuses this
+    /// registry's existing timer storage rather than a separate
+    /// startup-specific structure, so [`MetricsSnapshot::slowest_timers`]
+    /// and `diagnostics::get_diagnostics_report` (Phase 15) see these
+    /// phases for free, no new tool needed.
+    pub fn time<T>(&self, name: &str, f: impl FnOnce() -> T) -> T {
+        let start = std::time::Instant::now();
+        let result = f();
+        self.record_duration(name, start.elapsed());
+        result
     }
 
     pub fn snapshot(&self) -> MetricsSnapshot {
@@ -207,6 +244,74 @@ mod tests {
         let snapshot = registry.snapshot();
         let keys: Vec<&String> = snapshot.counters.keys().collect();
         assert_eq!(keys, vec!["alpha", "mike", "zebra"]);
+    }
+
+    #[test]
+    fn time_records_a_duration_and_returns_the_closure_result() {
+        let registry = MetricsRegistry::new();
+        let result = registry.time("startup_phase", || {
+            std::thread::sleep(Duration::from_millis(20));
+            42
+        });
+
+        assert_eq!(result, 42);
+        let summary = registry.snapshot().timers["startup_phase"];
+        assert_eq!(summary.count, 1);
+        // Generous lower bound (not an exact-ms check) to avoid flaking
+        // on a loaded CI box, matching this crate's existing
+        // real-timing tests in `monitor.rs`.
+        assert!(
+            summary.avg_ms >= 15.0,
+            "expected roughly a 20ms sample, got {}",
+            summary.avg_ms
+        );
+    }
+
+    #[test]
+    fn time_accumulates_multiple_calls_under_the_same_name() {
+        let registry = MetricsRegistry::new();
+        registry.time("phase", || ());
+        registry.time("phase", || ());
+        registry.time("phase", || ());
+
+        assert_eq!(registry.snapshot().timers["phase"].count, 3);
+    }
+
+    #[test]
+    fn slowest_timers_orders_descending_by_average_duration() {
+        let registry = MetricsRegistry::new();
+        registry.record_duration("fast", Duration::from_millis(5));
+        registry.record_duration("slow", Duration::from_millis(50));
+        registry.record_duration("medium", Duration::from_millis(20));
+
+        let snapshot = registry.snapshot();
+        let slowest = snapshot.slowest_timers(10);
+        let names: Vec<&str> = slowest.iter().map(|(name, _)| *name).collect();
+        assert_eq!(names, vec!["slow", "medium", "fast"]);
+    }
+
+    #[test]
+    fn slowest_timers_respects_the_requested_count() {
+        let registry = MetricsRegistry::new();
+        registry.record_duration("a", Duration::from_millis(1));
+        registry.record_duration("b", Duration::from_millis(2));
+        registry.record_duration("c", Duration::from_millis(3));
+
+        assert_eq!(registry.snapshot().slowest_timers(2).len(), 2);
+        assert_eq!(registry.snapshot().slowest_timers(0).len(), 0);
+        assert_eq!(registry.snapshot().slowest_timers(100).len(), 3);
+    }
+
+    #[test]
+    fn slowest_timers_breaks_ties_by_name_for_deterministic_output() {
+        let registry = MetricsRegistry::new();
+        registry.record_duration("zebra", Duration::from_millis(10));
+        registry.record_duration("alpha", Duration::from_millis(10));
+
+        let snapshot = registry.snapshot();
+        let slowest = snapshot.slowest_timers(10);
+        let names: Vec<&str> = slowest.iter().map(|(name, _)| *name).collect();
+        assert_eq!(names, vec!["alpha", "zebra"]);
     }
 
     #[test]

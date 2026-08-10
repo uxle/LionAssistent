@@ -105,6 +105,10 @@ impl MemoryStore {
             .map_err(db_err)?;
 
         self.index.borrow_mut().insert(id, vector);
+        // A new memory can change the answer to any previously-cached
+        // search, so the whole search cache -- not just the entry for
+        // this memory's own title/content -- must be invalidated.
+        self.search_cache.borrow_mut().clear();
         Ok(id)
     }
 
@@ -126,12 +130,24 @@ impl MemoryStore {
             )
             .map_err(db_err)?;
         self.index.borrow_mut().remove(&id);
+        self.search_cache.borrow_mut().clear();
         Ok(changed > 0)
     }
 
     /// Semantic search over saved memories (Apis SS6 `search_memory`),
     /// ranked by the configured `Embedder`'s similarity, highest first.
+    ///
+    /// Development_plan Phase 18 "Caching": an identical `(query, top_k)`
+    /// pair asked again while the cache entry is still valid skips both
+    /// re-embedding the query and re-scanning `index` -- see
+    /// `MemoryStore::search_cache` for the invalidation rule that keeps
+    /// this from ever returning stale results.
     pub fn search_memory(&self, query: &str, top_k: usize) -> AppResult<Vec<MemoryItem>> {
+        let cache_key = (query.to_string(), top_k);
+        if let Some(cached) = self.search_cache.borrow_mut().get(&cache_key) {
+            return Ok(cached);
+        }
+
         let query_vector = self.embedder.embed(query);
         let hits = self.index.borrow().search(&query_vector, top_k);
 
@@ -141,7 +157,18 @@ impl MemoryStore {
                 results.push(item);
             }
         }
+
+        self.search_cache
+            .borrow_mut()
+            .put(cache_key, results.clone());
         Ok(results)
+    }
+
+    /// Usage statistics for the `search_memory` result cache -- e.g. for
+    /// a future diagnostics/performance report to show whether it's
+    /// actually earning its keep in a given session.
+    pub fn search_cache_stats(&self) -> cache::CacheStats {
+        self.search_cache.borrow().stats()
     }
 
     /// Lists every saved memory, newest first.

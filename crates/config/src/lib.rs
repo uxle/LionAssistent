@@ -79,6 +79,51 @@ impl UiConfig {
     }
 }
 
+/// Development_plan Phase 18 "Caching"/"Memory Optimization": tunable
+/// cache sizes so a memory-constrained machine -- or a power user who
+/// just wants tighter or looser caching -- doesn't need to recompile
+/// anything to change them (PRD 6.7 settings panel; Archd SS11
+/// configuration stores "memory" explicitly). `embeddings::CachingEmbedder`
+/// and `memory::MemoryStore`'s search-result cache are the two real
+/// consumers today; more caches can read from the same struct later
+/// without another settings-panel section.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PerformanceConfig {
+    /// Max entries in the embedding cache (`embeddings::CachingEmbedder`).
+    pub embedding_cache_capacity: usize,
+    /// Max entries in `memory::MemoryStore`'s search-result cache.
+    pub search_cache_capacity: usize,
+    /// How long a cached entry stays valid, in seconds, before it's
+    /// treated as a miss even if it's still present. `0` means "no
+    /// expiry" -- capacity-based eviction only.
+    pub cache_ttl_seconds: u64,
+}
+
+impl Default for PerformanceConfig {
+    fn default() -> Self {
+        Self {
+            embedding_cache_capacity: 256,
+            search_cache_capacity: 64,
+            cache_ttl_seconds: 300,
+        }
+    }
+}
+
+impl PerformanceConfig {
+    /// `cache_ttl_seconds` as an `Option<Duration>` the way
+    /// `cache::CacheConfig` actually wants it -- `0` (or a value that
+    /// doesn't fit in a `Duration`'s constructor cleanly, which a plain
+    /// `u64` of seconds never can) becomes `None`, meaning "no expiry."
+    pub fn cache_ttl(&self) -> Option<std::time::Duration> {
+        if self.cache_ttl_seconds == 0 {
+            None
+        } else {
+            Some(std::time::Duration::from_secs(self.cache_ttl_seconds))
+        }
+    }
+}
+
 /// Top-level configuration matching the fields enumerated in TDS SS6 and
 /// Apis SS11. Any field missing from the TOML file on disk falls back to
 /// its default rather than failing to load (PRD 6.7 settings panel).
@@ -87,6 +132,7 @@ impl UiConfig {
 pub struct Config {
     pub model: ModelConfig,
     pub ui: UiConfig,
+    pub performance: PerformanceConfig,
     pub enabled_tools: Vec<String>,
     pub enabled_plugins: Vec<String>,
     pub logging_level: String,
@@ -97,6 +143,7 @@ impl Default for Config {
         Self {
             model: ModelConfig::default(),
             ui: UiConfig::default(),
+            performance: PerformanceConfig::default(),
             enabled_tools: vec![
                 "system_info".to_string(),
                 "open_application".to_string(),
@@ -224,6 +271,65 @@ mod tests {
         assert_eq!(loaded.ui.theme, "light");
         assert!(!loaded.ui.reduced_motion);
         assert_eq!(loaded.ui.effective_text_scale(), 1.0);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn default_performance_config_is_sane() {
+        let cfg = PerformanceConfig::default();
+        assert!(cfg.embedding_cache_capacity > 0);
+        assert!(cfg.search_cache_capacity > 0);
+        assert_eq!(cfg.cache_ttl(), Some(std::time::Duration::from_secs(300)));
+    }
+
+    #[test]
+    fn zero_ttl_seconds_means_no_expiry() {
+        let cfg = PerformanceConfig {
+            cache_ttl_seconds: 0,
+            ..PerformanceConfig::default()
+        };
+        assert_eq!(cfg.cache_ttl(), None);
+    }
+
+    #[test]
+    fn performance_config_round_trips_through_disk() {
+        let dir = std::env::temp_dir().join(format!("ai-assistant-test-{}", common::Id::new()));
+        let path = dir.join("config.toml");
+
+        let mut cfg = Config::default();
+        cfg.performance.embedding_cache_capacity = 512;
+        cfg.performance.search_cache_capacity = 16;
+        cfg.performance.cache_ttl_seconds = 60;
+        cfg.save(&path).unwrap();
+
+        let loaded = Config::load(&path).unwrap();
+        assert_eq!(loaded.performance.embedding_cache_capacity, 512);
+        assert_eq!(loaded.performance.search_cache_capacity, 16);
+        assert_eq!(loaded.performance.cache_ttl_seconds, 60);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_config_file_written_before_phase_18_still_loads_with_sane_performance_defaults() {
+        // Same backward-compatibility guarantee Phase 17 already proved
+        // for `[ui]`'s new fields, now for a section that didn't exist
+        // in the file at all -- `[performance]` is entirely absent here.
+        let dir = std::env::temp_dir().join(format!("ai-assistant-test-{}", common::Id::new()));
+        let path = dir.join("config.toml");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, "[ui]\ntheme = \"dark\"\n").unwrap();
+
+        let loaded = Config::load(&path).unwrap();
+        assert_eq!(
+            loaded.performance.embedding_cache_capacity,
+            PerformanceConfig::default().embedding_cache_capacity
+        );
+        assert_eq!(
+            loaded.performance.search_cache_capacity,
+            PerformanceConfig::default().search_cache_capacity
+        );
 
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -48,6 +48,62 @@ impl ResponseGenerator for EchoResponseGenerator {
     }
 }
 
+/// Defers constructing a real `ResponseGenerator` until the first
+/// `generate()` call, then keeps it (Development_plan Phase 18 "Lazy
+/// Loading"/"Startup Optimization"). The motivating case is `app`
+/// (Phase 5 on): loading `llm-runtime::CandleGemmaBackend` reads model
+/// weights off disk, which can be slow enough to matter for how quickly
+/// the window first appears -- most sessions send their first message
+/// well after startup anyway, so there's no reason that work has to
+/// finish before the UI is even up. Wrapping the *same* backend
+/// construction this crate always did in `LazyResponseGenerator::new`
+/// changes nothing about *what* gets built, only *when*.
+///
+/// The factory runs at most once, on whichever call to `generate()`
+/// happens first, and its result is reused after that -- proven by
+/// [`tests::factory_runs_exactly_once_across_multiple_generate_calls`]
+/// against a factory that counts its own invocations, not just asserted
+/// in a doc comment.
+pub struct LazyResponseGenerator {
+    factory: Option<Box<dyn FnOnce() -> Box<dyn ResponseGenerator> + Send + Sync>>,
+    generator: Option<Box<dyn ResponseGenerator>>,
+}
+
+impl LazyResponseGenerator {
+    pub fn new(
+        factory: impl FnOnce() -> Box<dyn ResponseGenerator> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            factory: Some(Box::new(factory)),
+            generator: None,
+        }
+    }
+
+    /// Whether the factory has actually run yet -- for tests, and for
+    /// any future diagnostics/startup report that wants to say whether
+    /// the real backend is loaded or generation just hasn't happened
+    /// yet.
+    pub fn is_initialized(&self) -> bool {
+        self.generator.is_some()
+    }
+}
+
+impl ResponseGenerator for LazyResponseGenerator {
+    fn generate(&mut self, prompt: &str) -> String {
+        if self.generator.is_none() {
+            let factory = self
+                .factory
+                .take()
+                .expect("factory is only ever taken once, exactly here");
+            self.generator = Some(factory());
+        }
+        self.generator
+            .as_mut()
+            .expect("just initialized above if it wasn't already")
+            .generate(prompt)
+    }
+}
+
 pub struct AssistantCore {
     sessions: SessionManager,
     formatter: GemmaPromptFormatter,
@@ -176,6 +232,72 @@ mod tests {
                 .messages()
                 .len(),
             4
+        );
+    }
+
+    #[test]
+    fn lazy_generator_does_not_run_its_factory_until_first_generate_call() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let ran = Arc::new(AtomicBool::new(false));
+        let ran_clone = ran.clone();
+        let lazy = LazyResponseGenerator::new(move || {
+            ran_clone.store(true, Ordering::SeqCst);
+            Box::new(EchoResponseGenerator) as Box<dyn ResponseGenerator>
+        });
+
+        assert!(!lazy.is_initialized());
+        assert!(
+            !ran.load(Ordering::SeqCst),
+            "constructing LazyResponseGenerator must not run the factory"
+        );
+    }
+
+    #[test]
+    fn factory_runs_exactly_once_across_multiple_generate_calls() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_clone = calls.clone();
+        let mut lazy = LazyResponseGenerator::new(move || {
+            calls_clone.fetch_add(1, Ordering::SeqCst);
+            Box::new(EchoResponseGenerator) as Box<dyn ResponseGenerator>
+        });
+
+        lazy.generate("first");
+        lazy.generate("second");
+        lazy.generate("third");
+
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert!(lazy.is_initialized());
+    }
+
+    #[test]
+    fn lazy_generator_delegates_to_the_constructed_backend() {
+        let mut lazy = LazyResponseGenerator::new(|| Box::new(EchoResponseGenerator));
+        let reply = lazy.generate("hello world");
+        assert!(reply.contains("pipeline OK"));
+    }
+
+    #[test]
+    fn lazy_generator_works_as_a_drop_in_assistant_core_backend() {
+        let mut core = AssistantCore::new(Box::new(LazyResponseGenerator::new(|| {
+            Box::new(EchoResponseGenerator)
+        })));
+        let session_id = core.create_session("gemma-3-1b");
+
+        let reply = core.process_message(session_id, "hello").unwrap();
+
+        assert!(reply.contains("pipeline OK"));
+        assert_eq!(
+            core.session(session_id)
+                .unwrap()
+                .conversation
+                .messages()
+                .len(),
+            2
         );
     }
 

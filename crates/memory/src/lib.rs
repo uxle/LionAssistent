@@ -30,28 +30,69 @@ pub struct MemoryStore {
     /// hitting disk on every query; kept in sync by `remember`/`forget`
     /// and rebuilt from the database on `open`/`in_memory`.
     index: RefCell<VectorIndex<Id>>,
+    /// Development_plan Phase 18 "Memory Optimization"/"Caching":
+    /// memoizes `search_memory`'s results, keyed on the exact
+    /// `(query, top_k)` pair (the only inputs that affect it). Cleared
+    /// on every `remember`/`forget` -- see those methods -- so a cached
+    /// hit can never be staler than the `index` it was computed from.
+    search_cache: RefCell<cache::Cache<(String, usize), Vec<MemoryItem>>>,
 }
 
 impl MemoryStore {
-    /// Opens (creating if needed) a SQLite-backed store at `path`.
+    /// Opens (creating if needed) a SQLite-backed store at `path`, with a
+    /// default-sized search-result cache. Use
+    /// [`MemoryStore::open_with_search_cache`] to configure that cache
+    /// explicitly (e.g. from `config::PerformanceConfig`).
     pub fn open(path: impl AsRef<Path>, embedder: Box<dyn Embedder>) -> AppResult<Self> {
-        Self::from_connection(Connection::open(path).map_err(db_err)?, embedder)
+        Self::open_with_search_cache(path, embedder, cache::CacheConfig::default())
     }
 
     /// An in-memory store: no file, gone when it's dropped. Useful for
     /// tests, and for running with persistence turned off (PRD 6.7:
     /// memory settings are user-configurable).
     pub fn in_memory(embedder: Box<dyn Embedder>) -> AppResult<Self> {
-        Self::from_connection(Connection::open_in_memory().map_err(db_err)?, embedder)
+        Self::in_memory_with_search_cache(embedder, cache::CacheConfig::default())
     }
 
-    fn from_connection(conn: Connection, embedder: Box<dyn Embedder>) -> AppResult<Self> {
+    /// Same as [`MemoryStore::open`], with an explicit search-result
+    /// cache configuration instead of the default.
+    pub fn open_with_search_cache(
+        path: impl AsRef<Path>,
+        embedder: Box<dyn Embedder>,
+        search_cache_config: cache::CacheConfig,
+    ) -> AppResult<Self> {
+        Self::from_connection(
+            Connection::open(path).map_err(db_err)?,
+            embedder,
+            search_cache_config,
+        )
+    }
+
+    /// Same as [`MemoryStore::in_memory`], with an explicit search-result
+    /// cache configuration instead of the default.
+    pub fn in_memory_with_search_cache(
+        embedder: Box<dyn Embedder>,
+        search_cache_config: cache::CacheConfig,
+    ) -> AppResult<Self> {
+        Self::from_connection(
+            Connection::open_in_memory().map_err(db_err)?,
+            embedder,
+            search_cache_config,
+        )
+    }
+
+    fn from_connection(
+        conn: Connection,
+        embedder: Box<dyn Embedder>,
+        search_cache_config: cache::CacheConfig,
+    ) -> AppResult<Self> {
         schema::create_schema(&conn).map_err(db_err)?;
         let index = long_term::load_index(&conn).map_err(db_err)?;
         Ok(Self {
             conn,
             embedder,
             index: RefCell::new(index),
+            search_cache: RefCell::new(cache::Cache::new(search_cache_config)),
         })
     }
 
@@ -229,6 +270,96 @@ mod tests {
             .unwrap();
         assert!(!hits.is_empty());
         assert_eq!(hits[0].title, "editor");
+    }
+
+    #[test]
+    fn repeated_identical_search_is_served_from_the_cache() {
+        let store = test_store();
+        store
+            .remember(MemoryCategory::Knowledge, "a", "some content", 5)
+            .unwrap();
+
+        store.search_memory("some content", 5).unwrap();
+        store.search_memory("some content", 5).unwrap();
+
+        let stats = store.search_cache_stats();
+        assert_eq!(stats.misses, 1, "first search should be a cache miss");
+        assert_eq!(
+            stats.hits, 1,
+            "second identical search should be a cache hit"
+        );
+    }
+
+    #[test]
+    fn a_different_top_k_is_a_separate_cache_entry_not_a_hit() {
+        let store = test_store();
+        store
+            .remember(MemoryCategory::Knowledge, "a", "some content", 5)
+            .unwrap();
+
+        store.search_memory("some content", 5).unwrap();
+        store.search_memory("some content", 1).unwrap();
+
+        assert_eq!(store.search_cache_stats().hits, 0);
+    }
+
+    #[test]
+    fn remembering_a_new_memory_invalidates_stale_cached_search_results() {
+        let store = test_store();
+        store
+            .remember(
+                MemoryCategory::Preference,
+                "editor",
+                "the user prefers vim keybindings",
+                5,
+            )
+            .unwrap();
+
+        // Cache a result set that does *not* yet include the memory
+        // below -- if `remember` failed to invalidate, the assertion
+        // after it would still see this stale, too-short result.
+        let before = store.search_memory("keybindings", 5).unwrap();
+        assert_eq!(before.len(), 1);
+
+        store
+            .remember(
+                MemoryCategory::Preference,
+                "shortcuts",
+                "the user also likes emacs keybindings for some tasks",
+                4,
+            )
+            .unwrap();
+
+        let after = store.search_memory("keybindings", 5).unwrap();
+        assert_eq!(
+            after.len(),
+            2,
+            "a cached search must not hide a memory remembered afterward"
+        );
+    }
+
+    #[test]
+    fn forgetting_a_memory_invalidates_stale_cached_search_results() {
+        let store = test_store();
+        let id = store
+            .remember(
+                MemoryCategory::Preference,
+                "editor",
+                "the user prefers vim keybindings",
+                5,
+            )
+            .unwrap();
+
+        let before = store.search_memory("keybindings", 5).unwrap();
+        assert_eq!(before.len(), 1);
+
+        store.forget(id).unwrap();
+
+        let after = store.search_memory("keybindings", 5).unwrap();
+        assert!(
+            after.is_empty(),
+            "a cached search must not keep returning a forgotten memory"
+        );
     }
 
     #[test]

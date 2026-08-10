@@ -276,6 +276,7 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "assistant-core",
+ "cache",
  "common",
  "config",
  "embeddings",
@@ -283,10 +284,12 @@ dependencies = [
  "llm-runtime",
  "logger",
  "memory",
+ "metrics",
  "model-registry",
  "tokio",
  "tracing",
  "ui",
+ "utilities",
 ]
 
 [[package]]
@@ -801,6 +804,10 @@ name = "bytes"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
+
+[[package]]
+name = "cache"
+version = "0.1.0"
 
 [[package]]
 name = "calloop"
@@ -1579,6 +1586,7 @@ checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
 name = "embeddings"
 version = "0.1.0"
 dependencies = [
+ "cache",
  "vector-db",
 ]
 
@@ -3586,6 +3594,7 @@ dependencies = [
 name = "memory"
 version = "0.1.0"
 dependencies = [
+ "cache",
  "chrono",
  "common",
  "conversation",
@@ -6711,6 +6720,10 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 [[package]]
 name = "utilities"
 version = "0.1.0"
+dependencies = [
+ "common",
+ "tokio",
+]
 
 [[package]]
 name = "uuid"

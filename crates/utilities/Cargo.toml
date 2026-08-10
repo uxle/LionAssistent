@@ -6,3 +6,5 @@ license.workspace = true
 description = "Small, dependency-light helper functions shared across the workspace."
 
 [dependencies]
+common = { workspace = true }
+tokio = { workspace = true }

@@ -14,6 +14,16 @@
 //! toolchain/network constraints already documented for `llm-runtime` in
 //! Phase 4, which is exactly why this crate doesn't depend on Candle to
 //! deliver *something* real in the meantime.
+//!
+//! [`caching::CachingEmbedder`] (Development_plan Phase 18 "Caching")
+//! wraps any `Embedder` in a memoizing cache -- useful even for the
+//! dependency-free [`HashingEmbedder`] below, since real callers
+//! (`memory::MemoryStore::search_memory` embeds its query on every
+//! search) can and do re-embed the same text more than once.
+
+mod caching;
+
+pub use caching::CachingEmbedder;
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

@@ -23,11 +23,7 @@ actually exists versus what's still planned.
 | 15 | Diagnostics | 🟢 Done and fully verified -- `metrics`, `telemetry`, and `diagnostics` build+test clean (342/342 workspace tests). Real CPU/memory/uptime sampling (reuses Phase 8's `linux_services::system`, nothing reimplemented); telemetry is double-gated opt-in with a closed, non-identifying event vocabulary enforced by the type system, not just documentation; a global panic hook writes structured local crash reports without disturbing normal panic output. `get_diagnostics_report` is a real `ReadOnly` tool. See notes below. |
 | 16 | Security | 🟢 Done and fully verified -- `security` and `sandbox` build+test clean (377/377 workspace tests). Real AES-256-GCM + Argon2 (RustCrypto, not hand-rolled), with tamper/wrong-key detection actually tested, not assumed. Real, empirically-verified `rlimit`-based process resource limits (a CPU-limited child is genuinely killed, tested). A Landlock filesystem sandbox is correct, real code whose enforcement could **not** be verified in this specific sandbox -- see notes below for the full investigation, which is different in kind from the Phase 2/4 toolchain gaps. No new tools this phase, deliberately. |
 | 17 | UI Polish | 🟡 Written, mostly **not** compile-verified -- by explicit choice (Lion confirmed after a fresh, deeper investigation of the Slint blocker; see notes below). `config::UiConfig`'s new fields (`reduced_motion`/`high_contrast`/`text_scale`) are real, compiled, tested Rust (8/8 `config` tests, +5 over Phase 16) since `config` has no Slint dependency. Everything touching `theme.slint`/`app-window.slint`/`ui/src/lib.rs` joins Phase 2 in "written but unverified," same as it's been since Phase 2 -- 382/382 tests still passing across every crate that *can* be verified. |
-| 18 | Performance | ⬜ Not started |
-| 15 | Diagnostics | ⬜ Not started |
-| 16 | Security | ⬜ Not started |
-| 17 | UI Polish | ⬜ Not started |
-| 18 | Performance | ⬜ Not started |
+| 18 | Performance | 🟢 Done and fully verified -- `cache` (new), plus real changes to `vector-db`, `embeddings`, `memory`, `assistant-core`, `utilities`, `metrics`, and `config`, all build+test clean (437/437 workspace tests, +55 over Phase 17). Capacity/TTL-bounded caching (embedder memoization, memory search-result cache, both invalidation-tested, not just hit-tested); a real algorithmic win in `vector_db::VectorIndex::search` (partial selection instead of a full sort, proven equivalent to the old behavior including tie-breaking against a 128-entry reference); deferred model loading (`LazyResponseGenerator`, tested as a real drop-in `assistant-core` backend); a shared `spawn_blocking` helper (`utilities::run_blocking`) fixing a genuine blocking-in-async-task issue found in `app`'s background loop; and per-phase startup timing (`metrics::MetricsRegistry::time`/`slowest_timers`). No new tool, deliberately -- see notes below. `app`'s own wiring remains unverified for the same pre-existing reason as ever (needs `ui`), but was checked against real rustc via a throwaway harness exercising the identical patterns -- see notes below.
 | 19 | Testing | ⬜ Not started |
 | 20 | Packaging | ⬜ Not started |
 | 21 | Documentation | ⬜ Not started |
@@ -517,3 +513,91 @@ blind, string-manipulation avoided entirely in favor of a slightly less
 polished but syntactically safer alternative) -- the honest ceiling of
 what careful work looks like when the compiler that would normally catch
 mistakes isn't available at all.
+
+## Phase 18 checklist
+
+Five modules per Development_plan: Memory Optimization, Startup
+Optimization, Async Improvements, Caching, Lazy Loading. One new crate
+(`cache`) plus real, tested changes to seven existing ones -- unlike
+Phase 17, none of this phase's *substance* touches Slint, so almost all
+of it landed as fully compiled, fully tested code rather than
+written-but-unverified. Only wiring it into `app` keeps the usual
+caveat.
+
+- [x] `cache` (new) -- capacity- and TTL-bounded `Cache<K, V>`, brute-force LRU eviction deliberately (documented against `vector_db::VectorIndex`'s own identical reasoning for its scale), plus `SharedCache<K, V>` (`Arc<Mutex<_>>`, the same sharing idiom `permission-manager`/`search` already established rather than a new one). Zero dependencies, matching `vector-db`/`embeddings`. 24/24 tests: eviction correctness, recency refresh, TTL expiry (real timing, generous margins), stats, and genuine multi-thread concurrency via `std::thread` for `SharedCache`.
+- [x] `vector_db::VectorIndex::search` -- replaced a full `sort_by` with `select_nth_unstable_by` partial selection when `top_k < n`, so ranking a handful of results out of a much larger memory store no longer pays for sorting entries it's about to discard. See the stability note below for a real subtlety this surfaced and how it was closed. 11/11 tests, including a 128-entry property-style equivalence check against a naive full-sort reference across many `top_k` values, ties included.
+- [x] `embeddings::CachingEmbedder<E>` -- wraps any `Embedder` in a `SharedCache`, memoizing `embed()` by exact text. Verified to produce byte-identical output to the unwrapped embedder, not just "probably the same." 12/12 tests.
+- [x] `memory::MemoryStore` -- a bounded `search_memory` result cache, keyed on `(query, top_k)`, cleared on every `remember`/`forget`. The two tests that actually matter here aren't the cache-hit ones -- they're `remembering_a_new_memory_invalidates_stale_cached_search_results` and `forgetting_a_memory_invalidates_stale_cached_search_results`, which fail loudly if invalidation is ever removed or narrowed. New `open_with_search_cache`/`in_memory_with_search_cache` constructors added *alongside* the existing `open`/`in_memory` (unchanged signatures, DIG's "backward-compatible when possible") rather than replacing them. 13/13 tests; downstream `search` crate re-verified unchanged (39/39).
+- [x] `assistant_core::LazyResponseGenerator` -- defers constructing the real backend until the first `generate()` call, then keeps it. Tested for zero eager construction, exactly-once factory execution across repeated calls, and -- the test that actually proves it's useful, not just correct in isolation -- as a real drop-in `Box<dyn ResponseGenerator>` inside a genuine `AssistantCore`. 9/9 tests.
+- [x] `utilities::run_blocking` -- `tokio::task::spawn_blocking` wrapped with panic-safe `AppError` mapping; the shared version of the bespoke pattern `tool_framework::ToolRouter::execute` has used since Phase 7. Tested including a real concurrency proof (a sibling timer task is confirmed to fire *while* the blocking work sleeps, not after) -- not just that the function returns the right value. 6/6 tests (`utilities` first real dependency addition since Phase 1: `tokio` + `common`).
+- [x] `metrics::MetricsRegistry::time`/`MetricsSnapshot::slowest_timers` -- reuses Phase 15's existing timer storage rather than a new startup-specific structure, so a future report gets these for free. 16/16 tests (+5).
+- [x] `config::PerformanceConfig` -- `embedding_cache_capacity`/`search_cache_capacity`/`cache_ttl_seconds`, wired into `Config` the identical way Phase 17 added `UiConfig`'s new fields: `#[serde(default)]`, additive, and a backward-compatibility test proving a config file that predates `[performance]` entirely still loads with sane defaults. 12/12 tests (+4).
+- [x] `app` (unverified, same reason as ever) -- `load_backend` deferred via `LazyResponseGenerator` instead of blocking startup; the background task's per-turn work (`process_message`, `save_session`) now moves through `utilities::run_blocking` instead of running directly inline in the async task, fixing a genuine blocking-in-async-task issue that predated this phase; `open_memory` now builds a `CachingEmbedder` and calls `open_with_search_cache`, both sized from `config.performance`; a `MetricsRegistry` times the startup phases and logs the slowest ones; `ui::run(bus, session_id)` fixed to the three-argument `ui::run(bus, session_id, &config.ui)` Phase 17 already needed and explicitly deferred fixing until this file was touched again. See the harness note below for how this got real compiler verification anyway.
+- [x] 437/437 tests passing across all 32 non-Slint, non-Candle crates (+55 over Phase 17).
+- [ ] **Not done, deliberately:**
+  - **No new tool this phase.** `security`/`sandbox` (Phase 16) set this precedent for infrastructure-only phases, and the same reasoning applies here for a different honest reason: a `get_performance_report` tool would have meant either inventing something with little new information (Phase 15's `get_diagnostics_report` already surfaces whatever `MetricsRegistry` records -- including this phase's new `startup_*`/`model_load_deferred` timers, automatically, no diagnostics-crate changes needed) or padding the tool surface for its own sake. Cache hit rates and deferred-construction state are implementation details a tool call doesn't obviously need either.
+  - **`vector-db`'s optimization is the only algorithmic change.** `memory`'s and `embeddings`' caches reduce *repeated* work; they don't change any single search's own complexity. A real approximate-nearest-neighbor index remains future work if this project's memory counts ever grow past the "hundreds to low-thousands" scale `vector-db`'s own doc comment already targets.
+  - **No cache wired into `search`'s command/file providers.** `memory`'s cache was the clearest, most directly-motivated win (`search_memory` re-embeds and re-scans on every call); extending the same treatment to the other two providers is a natural, bounded follow-on, not done here to keep this phase's diff reviewable.
+
+### A stability subtlety in the `vector-db` optimization
+
+`Vec::select_nth_unstable_by` is, as the name says, *unstable*: it's
+free to reorder equal elements however it likes while partitioning. The
+`sort_by` it replaced is stable. A first draft of this optimization
+compared scores alone and passed a 128-entry equivalence test against a
+naive full-sort reference right up until the test data included
+intentional ties (every 10th vector a deliberate duplicate of an earlier
+one) -- at which point tied entries straddling the `top_k` boundary
+could come out in a different order than the old, stable-sorted
+behavior would have produced, not on every run, but on some.
+
+The fix wasn't to abandon the optimization, it was to make tie-breaking
+explicit instead of relying on whichever algorithm happened to be
+running: each entry's original position gets tracked alongside its
+score, and the comparison function ranks by `(score descending,
+original position ascending)`. A stable sort is *equivalent* to sorting
+by `(key, original index)` with the index breaking ties -- so ranking on
+that same compound key makes an unstable partial-selection algorithm
+produce byte-for-byte identical output to the old stable full sort,
+for any input, ties included, not just usually the same. The 128-entry
+test with intentional duplicates stayed in specifically because it's
+the one that would have caught this if it hadn't already been caught
+during writing.
+
+### Verifying unverifiable code: a scratch harness for `app`
+
+Every phase since 2 has left `app`/`ui` in "written but not
+compile-verified" -- correct as far as careful reading and `cargo fmt
+--check`'s syntax validation can confirm, but never actually type-checked
+by rustc. This phase's changes to `app/src/main.rs` were involved enough
+(a `'static` closure boundary for the lazy backend, a value round-trip
+through `spawn_blocking`, new struct-literal construction of
+`cache::CacheConfig` from `config::PerformanceConfig` fields) that
+"reads correctly" felt like a meaningfully weaker guarantee than usual
+for exactly the parts of this phase that mattered most.
+
+`app` itself can't be checked directly -- `ui` needs Slint (rustc 1.77+)
+and `load_backend` touches `llm_runtime`, which needs Candle (rustc
+1.88+), both pre-existing, both unrelated to what this phase actually
+changed. So a throwaway crate outside the workspace (never committed,
+deleted immediately after use) depended on the *same* local path crates
+this phase touched -- `assistant-core`, `utilities`, `cache`,
+`embeddings`, `memory`, `metrics`, `config`, `event-bus`, `common` -- and
+reproduced `app/src/main.rs`'s new patterns line-for-line, with
+`load_backend` stubbed to sidestep the unrelated Candle wall. It
+compiled clean on the first real attempt, and then -- going one step
+further than a type-check -- actually ran: publishing a real
+`UserMessageReceived` event, driving it through the real background-task
+shape (lazy backend construction inside `MetricsRegistry::time`, the
+`run_blocking` round trip moving owned `assistant`/`memory_store`
+through Tokio's blocking pool and back), and receiving a real
+`ResponseGenerated` reply back off the bus within a timeout.
+
+This doesn't make `app` itself verified -- the two Slint/Candle gaps are
+exactly as open as they were after Phase 17, and the harness's stub
+`load_backend` is not proof that the *real* one (which this phase only
+changed the signature of, not the body) still type-checks against
+`llm_runtime`'s actual types. But it's real evidence, from a real
+compiler, for the specific new patterns this phase introduced, which is
+a meaningfully stronger position than the "written carefully, never
+checked" ceiling every prior phase's `app` changes had to accept.

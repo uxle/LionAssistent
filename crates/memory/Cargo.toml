@@ -11,6 +11,7 @@ conversation = { workspace = true }
 session-manager = { workspace = true }
 embeddings = { workspace = true }
 vector-db = { workspace = true }
+cache = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 # rusqlite 0.32+ uses c"..." string literals (stable since rustc 1.77);

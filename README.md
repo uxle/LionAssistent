@@ -10,15 +10,15 @@ Reasoning, Developer Implementation Guide, UI/UX, Plugin SDK, Model Runtime,
 Roadmap) live in the project's planning documents. `docs/ROADMAP.md` tracks
 build status phase by phase.
 
-**Status:** Phase 17 (UI Polish) written; mostly not compile-verified, by
-explicit choice -- see `docs/ROADMAP.md`'s Phase 17 notes for a much
-deeper investigation of the Slint blocker than earlier phases documented,
-and why it's a bigger wall than the dependency-pin fixes that resolved
-Phases 14/16. Phases 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, and 16
-are fully verified (build+test+run); Phase 17's `config::UiConfig`
-additions join that list (real, compiled, tested Rust with no Slint
-dependency) while everything touching `.slint` files or `ui/src/`
-remains unverified, same as Phase 2 always has been.
+**Status:** Phase 18 (Performance) done and fully verified -- see
+`docs/ROADMAP.md`'s Phase 18 notes for the full breakdown, including a
+real correctness subtlety caught and fixed in a `vector-db` optimization,
+and how `app`'s otherwise-unverifiable wiring got real compiler feedback
+anyway via a throwaway harness. Phases 1, 3, 5, 6, 7, 8, 9, 10, 11, 12,
+13, 14, 15, 16, and 18 are fully verified (build+test+run); Phase 17's
+`config::UiConfig` additions join that list (real, compiled, tested Rust
+with no Slint dependency) while everything touching `.slint` files or
+`ui/src/` remains unverified, same as Phase 2 always has been.
 
 ## Workspace layout
 
@@ -37,8 +37,8 @@ crates/
   model-registry/   filesystem-based discovery of installed models (no ML deps)
   llm-runtime/      Candle-based Gemma 3 GGUF backend (real API, unverified build)
   vector-db/        brute-force cosine-similarity vector search
-  embeddings/       text-to-vector embedding behind a swappable trait
-  memory/           SQLite-backed session persistence + long-term memory + search
+  embeddings/       text-to-vector embedding behind a swappable trait + a memoizing CachingEmbedder
+  memory/           SQLite-backed session persistence + long-term memory + search (with a cached, invalidation-safe search path)
   reasoning/        intent + reasoning-level classification (rule-based)
   planner/          dependency-graph plans with cycle detection
   tool-framework/   tool registry, router, validation, timeout enforcement (stub tools; real ones are Phase 8)
@@ -56,6 +56,7 @@ crates/
   diagnostics/      a global panic hook writing local crash reports + a get_diagnostics_report tool tying metrics/telemetry/crashes together
   security/         AES-256-GCM encryption, Argon2 key derivation, an encrypted SQLite secret store -- no tools exposed on purpose, see the crate's docs
   sandbox/          rlimit-based process resource limits (verified enforced) + a Landlock filesystem sandbox (written; enforcement unverifiable in this sandbox, see docs/ROADMAP.md)
+  cache/            capacity- and TTL-bounded Cache<K, V> + a thread-safe SharedCache wrapper -- backs embeddings::CachingEmbedder and memory's search-result cache
   ui/               Slint desktop shell: theme, sidebar, chat view, composer, animations, accessibility (Phase 17)
   app/              binary entry point (bin name: ai-assistant)
 config/
@@ -64,7 +65,7 @@ data/
   database/    assistant.db (SQLite, created on first run, gitignored)
 ```
 
-Later phases (17+: UI polish, performance, testing, and on) add more,
+Later phases (19+: testing, packaging, documentation, and on) add more,
 per the full project structure in `Development_plan`.
 
 ## Building
@@ -82,8 +83,8 @@ cargo test --workspace
 cargo run -p app
 ```
 
-Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, and 16 together (no
-Slint, no Candle) are fully verified and work even on old toolchains:
+Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, and 18 together
+(no Slint, no Candle) are fully verified and work even on old toolchains:
 
 ```bash
 cargo build -p common -p utilities -p config -p logger -p event-bus \
@@ -92,14 +93,14 @@ cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p reasoning -p planner -p tool-framework -p linux-services \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
-  -p security -p sandbox
+  -p security -p sandbox -p cache
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
   -p reasoning -p planner -p tool-framework -p linux-services \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
-  -p security -p sandbox
+  -p security -p sandbox -p cache
 ```
 
 `voice`'s tests shell out to `espeak-ng`, `pocketsphinx_continuous`, and

@@ -33,6 +33,7 @@ members = [
     "crates/diagnostics",
     "crates/security",
     "crates/sandbox",
+    "crates/cache",
     "crates/ui",
     "crates/app",
 ]
@@ -79,6 +80,7 @@ telemetry = { path = "crates/telemetry" }
 diagnostics = { path = "crates/diagnostics" }
 security = { path = "crates/security" }
 sandbox = { path = "crates/sandbox" }
+cache = { path = "crates/cache" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

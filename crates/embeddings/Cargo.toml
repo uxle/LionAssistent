@@ -6,6 +6,7 @@ license.workspace = true
 description = "Text-to-vector embedding, behind a swappable trait (Archd SS3 Replaceable AI backend; DBDMS SS3 Embeddings table)."
 
 [dependencies]
+cache = { workspace = true }
 
 [dev-dependencies]
 vector-db = { workspace = true }
