@@ -24,7 +24,7 @@ actually exists versus what's still planned.
 | 16 | Security | 🟢 Done and fully verified -- `security` and `sandbox` build+test clean (377/377 workspace tests). Real AES-256-GCM + Argon2 (RustCrypto, not hand-rolled), with tamper/wrong-key detection actually tested, not assumed. Real, empirically-verified `rlimit`-based process resource limits (a CPU-limited child is genuinely killed, tested). A Landlock filesystem sandbox is correct, real code whose enforcement could **not** be verified in this specific sandbox -- see notes below for the full investigation, which is different in kind from the Phase 2/4 toolchain gaps. No new tools this phase, deliberately. |
 | 17 | UI Polish | 🟡 Written, mostly **not** compile-verified -- by explicit choice (Lion confirmed after a fresh, deeper investigation of the Slint blocker; see notes below). `config::UiConfig`'s new fields (`reduced_motion`/`high_contrast`/`text_scale`) are real, compiled, tested Rust (8/8 `config` tests, +5 over Phase 16) since `config` has no Slint dependency. Everything touching `theme.slint`/`app-window.slint`/`ui/src/lib.rs` joins Phase 2 in "written but unverified," same as it's been since Phase 2 -- 382/382 tests still passing across every crate that *can* be verified. |
 | 18 | Performance | 🟢 Done and fully verified -- `cache` (new), plus real changes to `vector-db`, `embeddings`, `memory`, `assistant-core`, `utilities`, `metrics`, and `config`, all build+test clean (437/437 workspace tests, +55 over Phase 17). Capacity/TTL-bounded caching (embedder memoization, memory search-result cache, both invalidation-tested, not just hit-tested); a real algorithmic win in `vector_db::VectorIndex::search` (partial selection instead of a full sort, proven equivalent to the old behavior including tie-breaking against a 128-entry reference); deferred model loading (`LazyResponseGenerator`, tested as a real drop-in `assistant-core` backend); a shared `spawn_blocking` helper (`utilities::run_blocking`) fixing a genuine blocking-in-async-task issue found in `app`'s background loop; and per-phase startup timing (`metrics::MetricsRegistry::time`/`slowest_timers`). No new tool, deliberately -- see notes below. `app`'s own wiring remains unverified for the same pre-existing reason as ever (needs `ui`), but was checked against real rustc via a throwaway harness exercising the identical patterns -- see notes below.
-| 19 | Testing | ⬜ Not started |
+| 19 | Testing | 🟢 Done and fully verified -- new `integration-tests` crate (447/447 workspace tests, +10 over Phase 18), plus dependency-free benchmarks for `vector-db` and `cache`. Ten new cross-crate integration/security/stress tests investigate real gaps found by reading the actual code first, not padding: a plugin tool's panic *during execution* (not just lifecycle) proven caught by the router; two honestly-documented security findings (direct `Tool::execute()` bypasses every router check; `read_file` reaches any OS-readable path unconfirmed, by design, pending Landlock actually being applied at startup); capacity/correctness held under real concurrent load. `criterion` hit the same workspace-wide Candle/rustc-version wall as Slint (confirmed empirically, not assumed) -- see notes below for why hand-rolled benchmarks turned out to be the more consistent choice anyway.
 | 20 | Packaging | ⬜ Not started |
 | 21 | Documentation | ⬜ Not started |
 | 22 | Stable Release (v1.0) | ⬜ Not started |
@@ -601,3 +601,86 @@ changed the signature of, not the body) still type-checks against
 compiler, for the specific new patterns this phase introduced, which is
 a meaningfully stronger position than the "written carefully, never
 checked" ceiling every prior phase's `app` changes had to accept.
+
+## Phase 19 checklist
+
+Six modules per Development_plan: Unit Tests, Integration Tests, UI
+Tests, Stress Tests, Security Tests, Benchmarks. By this phase, unit
+testing is already thoroughly covered -- 437 tests landed across Phases
+1-18, plus three crates (`linux-services`, `search`, `updater`) already
+carry their own crate-local `tests/permission_integration.rs`. So this
+phase's actual job was finding what *isn't* covered yet: combinations of
+three or more crates nothing exercises together, adversarial input and
+bypass attempts nobody's tried, and real load rather than a unit test's
+handful of entries -- investigated by reading the relevant crates first
+(`tool-framework`, `permission-manager`, `plugin-manager`,
+`linux-services::files`, `sandbox`, `workflow-engine`), the same
+empirical-first approach as every other phase, so what got written is
+answering a real gap rather than padding a checklist.
+
+- [x] `integration-tests` (new crate) -- no library code, `[dev-dependencies]` only, three `tests/*.rs` files:
+  - `cross_crate_flows.rs` (3 tests): a `plugin-manager`-contributed tool reaching a real `tool_framework::ToolRouter` and executing successfully; that same tool panicking *during `execute()`* (not just plugin lifecycle -- `plugin-manager`'s own tests already cover `initialize()`/`shutdown()` panics via `catch_unwind`) caught cleanly by the router's `spawn_blocking`, not a crash; and `assistant-core` + a real permission-gated tool call + `memory` persistence all cooperating in one scenario, explicitly scoped to *not* claim the still-Candle-blocked automatic LLM-driven tool-call extraction is done.
+  - `security_adversarial.rs` (4 tests, TDS SS10's four categories -- plugin isolation lives in the file above since it's as much a cross-crate story as a security one): two honest findings written up as checked assertions, not prose -- calling `Tool::execute()` directly (bypassing `ToolRouter`) skips every safety check there is, and `read_file` reaches any path the OS-level user can read, unconfirmed, because path-scoping is deliberately deferred to `sandbox::FilesystemSandbox` (Phase 16), which nothing in this workspace applies at process startup yet. Plus adversarial robustness: a 4MB string and a 200k-element array handled promptly (via `spawn_blocking` + a real timeout -- see the note below on a mistake this caught in its own first draft), and 500 consecutive denials that never drift into an accidental approval.
+  - `stress.rs` (3 tests): `memory::MemoryStore::search_memory` correct and fast at 5,000 entries (an order of magnitude past Phase 18's own 128-entry equivalence test, exercised end-to-end through embedding + index + cache rather than `VectorIndex::search` alone); `cache::SharedCache`'s capacity invariant holding under 32 threads doing 20,000 mixed put/get/remove operations against 500 overlapping keys; `event_bus::EventBus` delivering all 2,000 events to all 50 concurrent subscribers under load.
+  - All 10 pass; clippy clean; fmt clean.
+- [x] `vector-db`/benches/search.rs and `cache`/benches/cache_ops.rs -- dependency-free, hand-rolled timing harnesses (`cargo bench -p vector-db` / `-p cache`), not `criterion`. See the note below for why. Both produced real, meaningful numbers that empirically confirm each crate's own documented complexity claims (roughly-linear O(n) scoring in `vector-db`'s search regardless of `top_k`, shrinking benefit from partial selection as `top_k` approaches `n`; `cache`'s brute-force eviction scan costing ~15.5µs even at 8,192 entries; `SharedCache`'s `Arc<Mutex<_>>` measurably but modestly slower than bare `Cache` for a single-threaded hit -- the exact multiple is noisy at sub-microsecond scale run to run, not a number worth quoting precisely).
+- [x] 447/447 tests passing across all 33 non-Slint, non-Candle crates (+10 over Phase 18).
+- [ ] **UI Tests**: not attempted. Slint has never once compiled in this sandbox (Phase 2 on); testing a UI that's never been built, using a testing approach that itself has never been tried against this project's actual `.slint` files, would be speculation on top of speculation. Consistent with every other UI-adjacent gap, this is left honestly open rather than filled with untested guesswork.
+- [ ] **Not done, deliberately:** `assistant-core` + tool-framework + permission-manager + memory cooperating (see `cross_crate_flows.rs` above) is explicitly *not* the automatic LLM-driven tool-call wiring every phase since 7 has flagged as blocked on Phase 4/Candle -- it proves the pieces have no interface friction, not that the missing glue exists.
+
+### A self-caught mistake: `tokio::time::timeout` around synchronous code doesn't bound it
+
+`security_adversarial.rs`'s oversized-input test originally wrapped a
+call to `InputSchema::validate` -- a plain synchronous function with no
+`.await` inside it -- in `tokio::time::timeout(Duration::from_secs(5),
+async { schema.validate(&args) })`. That looks like it should work, and
+it would have kept passing (`validate` doesn't actually hang on 200,000
+elements), which is exactly what makes this worth writing down: a
+`timeout` can only interrupt a future at a point where it yields control
+back to the runtime, and a synchronous call inside an `async` block with
+no `.await` never yields at all -- it runs to completion, however long
+that takes, before the timeout gets a chance to fire. If `validate` ever
+did hang, this "safety net" would have hung right along with it.
+
+The fix is the same real-timeout pattern `tool_framework::ToolRouter::execute`
+already uses for synchronous tool code: run the call on a separate
+blocking thread via `tokio::task::spawn_blocking`, and time out waiting
+for *that* task to finish, not the call itself. That's a genuine
+external bound, since the runtime can walk away from an unfinished
+`spawn_blocking` task's `JoinHandle` regardless of what the thread
+running it is doing.
+
+### Why `vector-db`/`cache`'s benchmarks don't use `criterion`
+
+`criterion` was the first choice -- it's the standard, and both crates
+already had a natural `[[bench]] harness = false` home for it. Adding it
+as a dev-dependency and running `cargo check -p vector-db --benches`
+failed immediately: `rayon-core ^1.13.0` required, unavailable on this
+sandbox's rustc 1.75. Pinning an older `rayon-core` failed too --
+`candle-core v0.11.0` (an existing `llm-runtime` dependency, needed
+because `app` depends on `llm-runtime`) already locks `rayon` to a
+version requiring that same `rayon-core ^1.13.0`, and this workspace's
+single shared `Cargo.lock` unifies dependency versions across every
+member. Disabling `criterion`'s default features (dropping the `rayon`-based
+plotting backend, keeping only `cargo_bench_support`) got past that, but
+surfaced the same wall one dependency later: `half`, criterion's float16
+serialization dependency for benchmark result caching, is *also* a
+`candle-core` dependency, pinned by candle to `^2.5.0` -- and every
+version of `half` in the `2.5.x`-`2.7.x` range that satisfies that
+constraint turns out to need rustc 1.81+. Three separate pin attempts
+(`rayon-core@1.12.1`, `half@2.7.1`→`2.5.0`) confirmed this is the same
+class of structural, workspace-wide toolchain wall Phase 2/4 already
+documented for Slint/Candle directly, not a fixable version conflict.
+
+Rather than treat that as a blocker to route around, it's worth noticing
+it's actually consistent with how this project already builds things:
+`vector-db` describes itself as zero-dependency in its own `Cargo.toml`,
+`cache` has no dependencies at all, and DIG SS11 says outright to avoid
+introducing unrelated dependencies. A benchmark harness that pulls in
+criterion's full analysis/plotting/serialization stack for two small,
+already-fast operations was always a slightly awkward fit for either
+crate's stated design philosophy. The hand-rolled replacement -- warmup
+iterations, then timed samples, min/median/mean, printed plainly -- is
+maybe forty lines of genuinely well-understood code, needs nothing from
+crates.io, and produces numbers exactly as real and useful for tracking
+regressions across future phases as criterion's would have been.

@@ -3127,6 +3127,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "integration-tests"
+version = "0.1.0"
+dependencies = [
+ "assistant-core",
+ "cache",
+ "common",
+ "embeddings",
+ "event-bus",
+ "linux-services",
+ "memory",
+ "permission-manager",
+ "plugin-manager",
+ "search",
+ "serde_json",
+ "tokio",
+ "tool-framework",
+ "vector-db",
+]
+
+[[package]]
 name = "interpolate_name"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

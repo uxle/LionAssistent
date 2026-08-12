@@ -6,3 +6,7 @@ license.workspace = true
 description = "A small in-process, capacity- and TTL-bounded cache (Development_plan Phase 18 'Caching')."
 
 [dependencies]
+
+[[bench]]
+name = "cache_ops"
+harness = false

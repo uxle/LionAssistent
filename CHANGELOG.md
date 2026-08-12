@@ -6,6 +6,14 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 19)
+
+- `integration-tests` crate (new, dev-dependencies only, no library code): cross-crate integration, adversarial security, and stress tests that no existing crate-local test covers. `tests/cross_crate_flows.rs` (3 tests) -- a plugin-contributed tool executing through a real `ToolRouter`, that same tool's panic *during execution* (not just plugin lifecycle) caught cleanly instead of crashing, and `assistant-core` + a real permission-gated tool call + `memory` persistence cooperating in one scenario (explicitly not the still-Candle-blocked automatic LLM tool-call wiring). `tests/security_adversarial.rs` (4 tests) -- two honest findings written as checked assertions: direct `Tool::execute()` calls bypass every router safety check, and `read_file` reaches any OS-readable path unconfirmed since path-scoping is deliberately deferred to `sandbox::FilesystemSandbox` (Phase 16), which nothing applies at process startup yet; plus oversized-input and repeated-denial robustness checks. `tests/stress.rs` (3 tests) -- memory search correctness at 5,000 entries, `SharedCache` capacity invariants under 32-thread contention, `event-bus` delivery under concurrent load. All 10 pass; clippy clean; fmt clean.
+- `vector-db/benches/search.rs`, `cache/benches/cache_ops.rs`: dependency-free, hand-rolled benchmarks (`cargo bench -p vector-db` / `-p cache`). `criterion` hit the same workspace-wide `candle-core`/rustc-version wall as Slint (three separate version-pin attempts confirmed it's structural, not a fixable conflict) -- see `docs/ROADMAP.md`'s Phase 19 notes for the full investigation and why a hand-rolled harness turned out to be the more consistent choice anyway, given both crates' existing zero-dependency design. Both produced real numbers confirming each crate's own documented complexity claims.
+- A self-caught test-design bug, fixed before it shipped: wrapping a synchronous, non-yielding call in `tokio::time::timeout` doesn't actually bound it (no `.await` point for the timeout to interrupt). Fixed using the same real-timeout pattern `tool_framework::ToolRouter::execute` already uses (`spawn_blocking` + timing out the join).
+- UI Tests not attempted (Slint still hasn't compiled once in this sandbox, same as every phase since 2) -- left honestly open rather than filled with untested guesswork.
+- 447/447 tests passing across all 33 non-Slint, non-Candle crates (+10 over Phase 18).
+
 ### Added (Phase 18)
 
 - `cache` crate (new): `Cache<K, V>` (capacity- and optional-TTL-bounded, brute-force LRU eviction -- deliberately, at this workspace's actual scale, the same reasoning `vector_db::VectorIndex` already documents for its own brute-force search) and `SharedCache<K, V>` (`Arc<Mutex<_>>`, the same sharing idiom `permission-manager`/`search` already use). Zero dependencies. 24/24 tests.

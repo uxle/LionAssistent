@@ -1,0 +1,24 @@
+[package]
+name = "integration-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cross-crate integration, security, and stress tests (Development_plan Phase 19 'Testing'). Not a library any other crate depends on -- see src/lib.rs."
+
+[dependencies]
+
+[dev-dependencies]
+common = { workspace = true }
+tool-framework = { workspace = true }
+permission-manager = { workspace = true }
+linux-services = { workspace = true }
+plugin-manager = { workspace = true }
+memory = { workspace = true }
+embeddings = { workspace = true }
+cache = { workspace = true }
+vector-db = { workspace = true }
+search = { workspace = true }
+assistant-core = { workspace = true }
+event-bus = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
