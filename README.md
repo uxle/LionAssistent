@@ -8,17 +8,21 @@ Rust for performance and safety, with Slint for the UI and a local model
 Full specs (PRD, Architecture, API, Database, Tool/Linux Integration, AI
 Reasoning, Developer Implementation Guide, UI/UX, Plugin SDK, Model Runtime,
 Roadmap) live in the project's planning documents. `docs/ROADMAP.md` tracks
-build status phase by phase.
+build status phase by phase. `docs/API.md`, `docs/DEVELOPER_GUIDE.md`,
+`docs/SDK_GUIDE.md`, and `docs/USER_GUIDE.md` (Phase 21) are the
+codebase-accurate, actively-maintained counterparts to those planning
+documents -- start there for anything practical.
 
-**Status:** Phase 20 (Packaging) done -- DEB, RPM, AppImage, and a
-portable tarball are fully built, installed, run, and removed for real
-in this sandbox (against a stand-in binary -- see `docs/ROADMAP.md`'s
-Phase 20 notes for why and how, the same technique Phase 18's throwaway
-harness used). Flatpak's manifest is confirmed valid by real
-`flatpak-builder` parsing; Snap's has no real tooling available to
-verify against at all in this sandbox. Both limits were confirmed
-empirically (network/tooling checks), not assumed. Phases 1, 3, 5, 6, 7,
-8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, and 20 are fully verified
+**Status:** Phase 21 (Documentation) done -- `cargo doc` now builds with
+zero warnings across all 33 verified crates (three real broken/redundant
+doc-link bugs found and fixed getting there), four new runnable
+`examples/*.rs` demonstrate the most central usage patterns (`cache`,
+`tool-framework`, `memory`, `assistant-core` -- see `docs/API.md`), and
+`docs/DEVELOPER_GUIDE.md`/`docs/SDK_GUIDE.md`/`docs/USER_GUIDE.md`/
+`docs/API.md` are new. Also fixed a small pre-existing drift:
+`config/default.toml` never got Phase 18's `[performance]` section added
+even though Phase 17's `[ui]` fields were. Phases 1, 3, 5, 6, 7,
+8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, and 21 are fully verified
 (build+test+run); Phase 17's `config::UiConfig` additions join that list
 (real, compiled, tested Rust with no Slint dependency) while everything
 touching `.slint` files or `ui/src/` remains unverified, same as Phase 2
@@ -27,6 +31,7 @@ always has been.
 ## Workspace layout
 
 ```
+docs/               API.md, DEVELOPER_GUIDE.md, SDK_GUIDE.md, USER_GUIDE.md, ROADMAP.md (Phase 21)
 LICENSE-MIT, LICENSE-APACHE   dual MIT/Apache-2.0 license text (Phase 20)
 assets/
   icons/            ai-assistant.svg placeholder icon + rendered PNGs (16-512px)

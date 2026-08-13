@@ -1,4 +1,4 @@
-//! Actually running a [`Workflow`](crate::Workflow) (Apis SS15
+//! Actually running a [`Workflow`] (Apis SS15
 //! `execute_workflow`), through `tool-framework`'s real
 //! [`tool_framework::ToolRouter`] -- the same pipeline Phase 9's
 //! Permission Manager gates, so a workflow step requiring confirmation

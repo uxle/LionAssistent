@@ -27,8 +27,8 @@ use common::{AppError, AppResult};
 ///
 /// A panic inside `f` becomes a clean [`AppError`] instead of unwinding
 /// across the task boundary (DIG SS8: never let a recoverable failure
-/// crash the app) -- proven by
-/// [`tests::a_panic_inside_becomes_a_clean_error_not_a_crash`], not just
+/// crash the app) -- proven by this module's own
+/// `a_panic_inside_becomes_a_clean_error_not_a_crash` test, not just
 /// asserted in this comment.
 pub async fn run_blocking<T, F>(f: F) -> AppResult<T>
 where

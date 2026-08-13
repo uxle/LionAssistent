@@ -60,10 +60,10 @@ impl ResponseGenerator for EchoResponseGenerator {
 /// changes nothing about *what* gets built, only *when*.
 ///
 /// The factory runs at most once, on whichever call to `generate()`
-/// happens first, and its result is reused after that -- proven by
-/// [`tests::factory_runs_exactly_once_across_multiple_generate_calls`]
-/// against a factory that counts its own invocations, not just asserted
-/// in a doc comment.
+/// happens first, and its result is reused after that -- proven by this
+/// module's own `factory_runs_exactly_once_across_multiple_generate_calls`
+/// test against a factory that counts its own invocations, not just
+/// asserted in a doc comment.
 pub struct LazyResponseGenerator {
     factory: Option<Box<dyn FnOnce() -> Box<dyn ResponseGenerator> + Send + Sync>>,
     generator: Option<Box<dyn ResponseGenerator>>,

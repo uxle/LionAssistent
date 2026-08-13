@@ -6,6 +6,16 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 21)
+
+- `docs/API.md`: categorized crate index pointing to real `cargo doc` output (the actual API reference) rather than a hand-maintained duplicate. `cargo doc --no-deps` now builds with **zero warnings** across all 33 verified crates -- three real bugs found and fixed getting there: two doc comments (in `assistant-core` and `utilities`, both from Phase 18) linked to `#[cfg(test)]`-only test functions that don't exist in a normal doc build, and one redundant explicit link target in `workflow-engine`. A fourth, similar warning in `telemetry` (a doc link to a private constant) was also fixed.
+- `docs/DEVELOPER_GUIDE.md`: practical, codebase-accurate notes -- what's verified vs. blocked and why, the two techniques this project uses to verify code it can't compile (throwaway harness, stand-in artifact), conventions that hold across the whole workspace (error-mapping helpers, `register_all`, `Arc<Mutex<_>>` sharing), how to add a tool or a crate, and this project's testing philosophy.
+- `docs/SDK_GUIDE.md`: a plugin-writing guide against the real, current `Plugin` trait and `PluginManifest` format (cross-checked against `crates/plugin-manager/src/` while writing, not from memory), including the full lifecycle and pointers to the real cross-crate panic-isolation tests from Phase 19.
+- `docs/USER_GUIDE.md`: honestly scoped from the first line -- describes intended behavior based on the actual code (installation via Phase 20's packages, configuration, memory/privacy, permissions including the file-access finding from Phase 19's security tests), explicit that the assembled `app` binary itself has never run end-to-end.
+- Four new runnable examples, each written against real APIs (verified/corrected against actual source before running, not written from memory) and run for real: `cache/examples/basic_usage.rs`, `tool-framework/examples/custom_tool.rs` (defining and executing a custom `Tool` through the real validation/permission pipeline -- corrected twice against the real `ToolOutcome`/`ResultStatus` types before it compiled), `memory/examples/remember_and_search.rs`, `assistant-core/examples/minimal_chat_loop.rs` (demonstrates Phase 18's `LazyResponseGenerator` deferring construction to first use).
+- Fixed a small pre-existing drift found while writing the User Guide: `config/default.toml` never got Phase 18's `[performance]` section added, even though Phase 17's `[ui]` fields were -- added and verified it round-trips through a real `Config::load`.
+- 447/447 tests passing, unchanged from Phase 20 (this phase touched no logic, only doc comments, examples, and one config file).
+
 ### Added (Phase 20)
 
 - `LICENSE-MIT`, `LICENSE-APACHE`: fixed a pre-existing gap found while starting this phase -- the workspace declared `license = "MIT OR Apache-2.0"` since Phase 1 but no LICENSE file existed anywhere in the repository.

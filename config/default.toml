@@ -16,6 +16,15 @@ reduced_motion = false
 high_contrast = false
 text_scale = 1.0
 
+[performance]
+# Phase 18 (Caching/Memory Optimization): tunable cache sizes for
+# embeddings::CachingEmbedder and memory::MemoryStore's search-result
+# cache. cache_ttl_seconds = 0 means "no expiry" (capacity-based
+# eviction only) -- see config::PerformanceConfig::cache_ttl.
+embedding_cache_capacity = 256
+search_cache_capacity = 64
+cache_ttl_seconds = 300
+
 enabled_tools = ["system_info", "open_application", "list_directory"]
 enabled_plugins = []
 logging_level = "info"

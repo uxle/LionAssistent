@@ -52,7 +52,7 @@ impl TelemetryEvent {
         }
     }
 
-    /// Attaches a coarse label, truncated to [`MAX_LABEL_LEN`] characters
+    /// Attaches a coarse label, truncated to `MAX_LABEL_LEN` characters
     /// if needed. Intended for closed, small-cardinality context (a
     /// `ToolCategory`'s name, say) -- see this module's doc comment for
     /// what must never go here.
