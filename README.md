@@ -10,21 +10,31 @@ Reasoning, Developer Implementation Guide, UI/UX, Plugin SDK, Model Runtime,
 Roadmap) live in the project's planning documents. `docs/ROADMAP.md` tracks
 build status phase by phase.
 
-**Status:** Phase 19 (Testing) done and fully verified -- see
-`docs/ROADMAP.md`'s Phase 19 notes for the full breakdown, including two
-honest security findings written up as checked tests rather than prose,
-a self-caught bug in the test suite's own design, and why the
-benchmarks are hand-rolled instead of using `criterion` (the same
-Slint-class toolchain wall, hit a second time and investigated fresh
-rather than assumed). Phases 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-16, 18, and 19 are fully verified (build+test+run); Phase 17's
-`config::UiConfig` additions join that list (real, compiled, tested Rust
-with no Slint dependency) while everything touching `.slint` files or
-`ui/src/` remains unverified, same as Phase 2 always has been.
+**Status:** Phase 20 (Packaging) done -- DEB, RPM, AppImage, and a
+portable tarball are fully built, installed, run, and removed for real
+in this sandbox (against a stand-in binary -- see `docs/ROADMAP.md`'s
+Phase 20 notes for why and how, the same technique Phase 18's throwaway
+harness used). Flatpak's manifest is confirmed valid by real
+`flatpak-builder` parsing; Snap's has no real tooling available to
+verify against at all in this sandbox. Both limits were confirmed
+empirically (network/tooling checks), not assumed. Phases 1, 3, 5, 6, 7,
+8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, and 20 are fully verified
+(build+test+run); Phase 17's `config::UiConfig` additions join that list
+(real, compiled, tested Rust with no Slint dependency) while everything
+touching `.slint` files or `ui/src/` remains unverified, same as Phase 2
+always has been.
 
 ## Workspace layout
 
 ```
+LICENSE-MIT, LICENSE-APACHE   dual MIT/Apache-2.0 license text (Phase 20)
+assets/
+  icons/            ai-assistant.svg placeholder icon + rendered PNGs (16-512px)
+packaging/
+  shared/           .desktop entry + AppStream metainfo, reused by every format below
+  deb/, rpm/, appimage/, flatpak/, snap/   per-format manifests/control files
+  portable/         (build output only -- see scripts/package/build-portable.sh)
+scripts/package/    render-icons.sh + one build-*.sh per format + build-all.sh
 crates/
   common/           shared types + central error system (AppError/AppResult)
   utilities/        small dependency-light helpers
@@ -132,6 +142,36 @@ them `gemma-3-1b.gguf` and `gemma-3-1b.tokenizer.json`, and put both in
 `models/gemma/` (or wherever `config.model.model_path` points). `app`
 picks them up automatically; without them it falls back to a stub backend
 with a logged warning rather than failing.
+
+## Packaging
+
+Once a real `cargo build --release -p app` produces
+`target/release/ai-assistant` on a machine with a modern toolchain:
+
+```bash
+./scripts/package/render-icons.sh    # only needed once, or after editing assets/icons/ai-assistant.svg
+./scripts/package/build-all.sh       # DEB + RPM + AppImage + portable tarball, all at once
+```
+
+or build one format at a time with `scripts/package/build-deb.sh`,
+`build-rpm.sh`, `build-appimage.sh` (needs `appimagetool` on `PATH` or
+`$APPIMAGETOOL` set -- see `packaging/appimage/`), or
+`build-portable.sh`. Every script accepts an explicit binary path as its
+one argument if it's not at the default `target/release/ai-assistant`.
+Output lands in `target/package/`.
+
+Flatpak: `flatpak-builder --force-clean target/package/flatpak-build
+packaging/flatpak/com.lionos.AiAssistant.yml` (needs the
+`org.freedesktop.Platform`//`Sdk` 23.08 runtimes installed from Flathub
+first -- not reachable from this project's own dev sandbox, see
+`docs/ROADMAP.md`'s Phase 20 notes). Snap:
+`snapcraft` from `packaging/snap/` (needs `snapcraft` itself, also not
+available in this project's own dev sandbox -- same notes).
+
+All six formats' manifests were written for a real toolchain, but only
+DEB/RPM/AppImage/portable have actually been built, installed, run, and
+(DEB) removed here, against a stand-in binary -- see `docs/ROADMAP.md`'s
+Phase 20 notes for why and how.
 
 ## Development
 

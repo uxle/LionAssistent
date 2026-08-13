@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata (freedesktop.org AppStream spec), referenced by
+     the AppImage build (silences appimagetool's missing-metadata
+     warning) and usable by any distro's software center that reads
+     /usr/share/metainfo. -->
+<component type="desktop-application">
+  <id>com.lionos.AiAssistant</id>
+  <name>AI Assistant</name>
+  <summary>Chat with a local AI assistant and control your Linux desktop safely</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <developer id="com.lionos">
+    <name>Lion</name>
+  </developer>
+  <description>
+    <p>
+      A local-first AI assistant for Linux desktops. Provides a chat
+      interface, safe system control through a permission-gated tool
+      layer, local memory, and optional voice interaction, with no
+      cloud dependency for the core assistant.
+    </p>
+  </description>
+  <launchable type="desktop-id">ai-assistant.desktop</launchable>
+  <categories>
+    <category>Utility</category>
+  </categories>
+  <url type="homepage">https://github.com/lion/ai-assistant</url>
+  <provides>
+    <binary>ai-assistant</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-08-12"/>
+  </releases>
+</component>

@@ -1,0 +1,96 @@
+app-id: com.lionos.AiAssistant
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+command: ai-assistant
+
+# This app's whole mission (PRD SS1: "control Linux system actions
+# through approved tools") sits in real tension with what Flatpak
+# sandboxing is *for* -- restricting exactly that kind of system access
+# by default. The permissions below are the minimum for the chat UI and
+# local-file/notification features (TCLIS categories: File Management,
+# Notification, Clipboard) to work at all inside the sandbox; anything
+# needing broader system control (process management, package
+# management, most of TCLIS's "Terminal" and "Power" categories) is
+# either unavailable to a Flatpak build of this app, or would need
+# additional permissions a user grants explicitly via Flatpak's own
+# permission-store/portal mechanism at install or run time -- not
+# something to request unconditionally here. A DEB/RPM/AppImage install
+# (this phase's other formats) doesn't have this ceiling; that
+# trade-off should be visible to anyone choosing which package format
+# to ship or install, which is why it's written down here rather than
+# only implied by the finish-args list.
+finish-args:
+  # Display: Wayland preferred, X11 as fallback (Archd SS4 notes
+  # cross-desktop compatibility; this covers both without assuming
+  # which the user's session runs).
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  # GPU acceleration for the Slint UI.
+  - --device=dri
+  # Notifications (TCLIS "Notification" category).
+  - --talk-name=org.freedesktop.Notifications
+  # Local memory database and any user-selected model files live under
+  # the app's own Flatpak data directory -- no broad --filesystem=home
+  # grant by default. A user who wants this app to manage files outside
+  # that directory (PRD 6.4 "reading directories", "managing selected
+  # files") can grant additional access per-session via Flatpak's
+  # file-chooser portal, or install the DEB/RPM/AppImage build instead
+  # if they want the tool layer's full intended capability.
+  - --persist=.local/share/ai-assistant
+
+modules:
+  - name: ai-assistant
+    # Packages an already-built release binary rather than compiling
+    # from Rust source inside the Flatpak build sandbox. Building from
+    # source here would need every crate in Cargo.lock vendored via
+    # flatpak-cargo-generator (a separate, substantial undertaking:
+    # enumerating this workspace's full dependency tree, including
+    # candle-core's and Slint's own transitive dependencies, into an
+    # offline sources list) -- deliberately out of this phase's scope,
+    # and orthogonal to what's actually blocking a real binary from
+    # existing yet (see docs/ROADMAP.md's Phase 20 notes). The DEB, RPM,
+    # and AppImage builds in this same phase take the identical
+    # pre-built-binary approach for the same reason.
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 ai-assistant /app/bin/ai-assistant
+      - install -Dm644 ai-assistant.desktop /app/share/applications/com.lionos.AiAssistant.desktop
+      - install -Dm644 com.lionos.AiAssistant.metainfo.xml /app/share/metainfo/com.lionos.AiAssistant.metainfo.xml
+      - install -Dm644 icons/ai-assistant-16.png /app/share/icons/hicolor/16x16/apps/com.lionos.AiAssistant.png
+      - install -Dm644 icons/ai-assistant-32.png /app/share/icons/hicolor/32x32/apps/com.lionos.AiAssistant.png
+      - install -Dm644 icons/ai-assistant-48.png /app/share/icons/hicolor/48x48/apps/com.lionos.AiAssistant.png
+      - install -Dm644 icons/ai-assistant-64.png /app/share/icons/hicolor/64x64/apps/com.lionos.AiAssistant.png
+      - install -Dm644 icons/ai-assistant-128.png /app/share/icons/hicolor/128x128/apps/com.lionos.AiAssistant.png
+      - install -Dm644 icons/ai-assistant-256.png /app/share/icons/hicolor/256x256/apps/com.lionos.AiAssistant.png
+      - install -Dm644 icons/ai-assistant-512.png /app/share/icons/hicolor/512x512/apps/com.lionos.AiAssistant.png
+    sources:
+      - type: file
+        path: ../../target/release/ai-assistant
+        dest-filename: ai-assistant
+      - type: file
+        path: ../shared/ai-assistant.desktop
+      - type: file
+        path: ../shared/com.lionos.AiAssistant.metainfo.xml
+      - type: file
+        path: ../../assets/icons/ai-assistant-16.png
+        dest: icons
+      - type: file
+        path: ../../assets/icons/ai-assistant-32.png
+        dest: icons
+      - type: file
+        path: ../../assets/icons/ai-assistant-48.png
+        dest: icons
+      - type: file
+        path: ../../assets/icons/ai-assistant-64.png
+        dest: icons
+      - type: file
+        path: ../../assets/icons/ai-assistant-128.png
+        dest: icons
+      - type: file
+        path: ../../assets/icons/ai-assistant-256.png
+        dest: icons
+      - type: file
+        path: ../../assets/icons/ai-assistant-512.png
+        dest: icons

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=AI Assistant
+GenericName=Local AI Assistant
+Comment=Chat with a local AI assistant and control your Linux desktop safely
+Exec=ai-assistant %U
+Icon=ai-assistant
+Terminal=false
+Categories=Utility;
+Keywords=AI;Assistant;Chat;LLM;Gemma;
+StartupNotify=true
+StartupWMClass=ai-assistant

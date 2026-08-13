@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Placeholder application icon for the Local Linux AI Assistant.
+
+  This is intentionally simple: a rounded-square badge (matching the
+  "modern, minimal" direction in UI-UX_ SS2) with an abstract
+  speech-bubble-plus-node mark suggesting "a conversation with something
+  that thinks." It exists so packaging (desktop entry, AppImage,
+  Flatpak) has a real, valid icon reference rather than a missing file;
+  replace with real brand/design work (assets/icons/ per the project
+  structure) before an actual release. Generated at multiple PNG sizes
+  via scripts/package/render-icons.sh.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1b1f2a"/>
+      <stop offset="100%" stop-color="#2a3142"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="256" height="256" rx="56" fill="url(#bg)"/>
+  <path d="M 64 88
+           C 64 74.7 74.7 64 88 64
+           L 168 64
+           C 181.3 64 192 74.7 192 88
+           L 192 132
+           C 192 145.3 181.3 156 168 156
+           L 112 156
+           L 82 184
+           L 86 156
+           L 88 156
+           C 74.7 156 64 145.3 64 132
+           Z"
+        fill="#e7ebf5"/>
+  <circle cx="106" cy="110" r="9" fill="#2a3142"/>
+  <circle cx="150" cy="110" r="9" fill="#2a3142"/>
+  <circle cx="198" cy="176" r="16" fill="#7aa2ff"/>
+</svg>

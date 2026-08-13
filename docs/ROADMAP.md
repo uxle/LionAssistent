@@ -25,7 +25,7 @@ actually exists versus what's still planned.
 | 17 | UI Polish | 🟡 Written, mostly **not** compile-verified -- by explicit choice (Lion confirmed after a fresh, deeper investigation of the Slint blocker; see notes below). `config::UiConfig`'s new fields (`reduced_motion`/`high_contrast`/`text_scale`) are real, compiled, tested Rust (8/8 `config` tests, +5 over Phase 16) since `config` has no Slint dependency. Everything touching `theme.slint`/`app-window.slint`/`ui/src/lib.rs` joins Phase 2 in "written but unverified," same as it's been since Phase 2 -- 382/382 tests still passing across every crate that *can* be verified. |
 | 18 | Performance | 🟢 Done and fully verified -- `cache` (new), plus real changes to `vector-db`, `embeddings`, `memory`, `assistant-core`, `utilities`, `metrics`, and `config`, all build+test clean (437/437 workspace tests, +55 over Phase 17). Capacity/TTL-bounded caching (embedder memoization, memory search-result cache, both invalidation-tested, not just hit-tested); a real algorithmic win in `vector_db::VectorIndex::search` (partial selection instead of a full sort, proven equivalent to the old behavior including tie-breaking against a 128-entry reference); deferred model loading (`LazyResponseGenerator`, tested as a real drop-in `assistant-core` backend); a shared `spawn_blocking` helper (`utilities::run_blocking`) fixing a genuine blocking-in-async-task issue found in `app`'s background loop; and per-phase startup timing (`metrics::MetricsRegistry::time`/`slowest_timers`). No new tool, deliberately -- see notes below. `app`'s own wiring remains unverified for the same pre-existing reason as ever (needs `ui`), but was checked against real rustc via a throwaway harness exercising the identical patterns -- see notes below.
 | 19 | Testing | 🟢 Done and fully verified -- new `integration-tests` crate (447/447 workspace tests, +10 over Phase 18), plus dependency-free benchmarks for `vector-db` and `cache`. Ten new cross-crate integration/security/stress tests investigate real gaps found by reading the actual code first, not padding: a plugin tool's panic *during execution* (not just lifecycle) proven caught by the router; two honestly-documented security findings (direct `Tool::execute()` bypasses every router check; `read_file` reaches any OS-readable path unconfirmed, by design, pending Landlock actually being applied at startup); capacity/correctness held under real concurrent load. `criterion` hit the same workspace-wide Candle/rustc-version wall as Slint (confirmed empirically, not assumed) -- see notes below for why hand-rolled benchmarks turned out to be the more consistent choice anyway.
-| 20 | Packaging | ⬜ Not started |
+| 20 | Packaging | 🟢 Done -- DEB, RPM, AppImage, and a portable tarball all really built, installed (DEB/RPM where the sandbox's own package database allowed it), run, and (DEB) removed against a stand-in binary. Flatpak's manifest is confirmed fully valid by real `flatpak-builder` parsing (`--show-manifest` succeeds); Snap's is correct per spec but only generically YAML-validated -- both limits confirmed empirically (network/tooling checks), not assumed. Fixed two pre-existing gaps found along the way: no LICENSE file existed despite the workspace declaring one since Phase 1, and no `assets/` directory existed at all.
 | 21 | Documentation | ⬜ Not started |
 | 22 | Stable Release (v1.0) | ⬜ Not started |
 
@@ -684,3 +684,89 @@ iterations, then timed samples, min/median/mean, printed plainly -- is
 maybe forty lines of genuinely well-understood code, needs nothing from
 crates.io, and produces numbers exactly as real and useful for tracking
 regressions across future phases as criterion's would have been.
+
+## Phase 20 checklist
+
+Five modules per Development_plan: DEB, RPM, AppImage, Flatpak, Snap,
+plus a sixth format ("portable") the project's own directory layout
+already anticipated (`packaging/portable/`). This phase is a different
+kind of work from every phase before it -- there's no Rust to compile or
+`cargo test` to run. Every one of these six formats packages a
+*compiled binary*, and `ai-assistant` has never once compiled in this
+sandbox (Slint since Phase 2, Candle since Phase 4). So the approach
+here mirrors Phase 18's throwaway harness: build the real packaging
+mechanism -- scripts, manifests, control files -- and verify it for real
+wherever the sandbox's own tooling and network allowlist permit, against
+a trivial stand-in binary standing in for the still-unbuildable real one,
+rather than either skip verification entirely or pretend a stand-in
+proves more than it does.
+
+Two genuine, pre-existing gaps surfaced immediately on starting this
+phase, both fixed as part of it since packaging is exactly what exposed
+them as blocking: no `LICENSE` file existed anywhere in the repository
+despite the workspace declaring `license = "MIT OR Apache-2.0"` since
+Phase 1 (added `LICENSE-MIT`/`LICENSE-APACHE`, the standard Rust
+dual-license convention), and no `assets/` directory existed at all
+despite the project's own directory layout anticipating
+`assets/icons/` (added a placeholder SVG + rendered PNGs).
+
+- [x] **Shared assets**: `assets/icons/ai-assistant.svg` (placeholder -- explicitly documented as such, pending real design work) rendered to PNGs at 16/32/48/64/128/256/512px via `rsvg-convert`. Two real bugs caught and fixed while building this, neither found by inspection: an XML double-hyphen-in-comment syntax error in the SVG (rejected by `rsvg-convert`, not by ImageMagick's own delegate mechanism, which failed with a much less specific error first), and `render-icons.sh`'s `cd` only climbing one directory level when the script lives two levels deep.
+- [x] **`.desktop` entry** (`packaging/shared/ai-assistant.desktop`): real `desktop-file-validate` (installed via apt) caught a genuine issue on the first pass -- `Categories=Utility;Office;` has two main categories, which the spec allows but warns could duplicate the app across menu sections. Fixed to `Categories=Utility;`; validates clean.
+- [x] **AppStream metadata** (`packaging/shared/com.lionos.AiAssistant.metainfo.xml`): real `appstreamcli validate` (installed via apt) caught a deprecated `<developer_name>` tag (fixed to the current `<developer>`/`<name>` form) and a hard error -- AppStream requires the metainfo filename to match its own component ID, and `ai-assistant.appdata.xml` didn't match `com.lionos.AiAssistant`. Renamed to `com.lionos.AiAssistant.metainfo.xml`; validates clean except one warning that's really a placeholder-content issue (the project's own GitHub URL isn't real yet), not a spec violation.
+- [x] **DEB** (`packaging/deb/`, `scripts/package/build-deb.sh`): real `dpkg-deb --build --root-owner-group` produced a well-formed package (correct FHS layout, correct permissions, `Installed-Size` computed from the actual staged tree, `postinst`/`postrm` present and marked executable). Then actually installed with `dpkg -i` -- `ai-assistant` landed on `PATH` and ran, the desktop file and all seven icon sizes installed under `/usr/share/`, `dpkg -l` showed it correctly registered -- and cleanly removed with `dpkg -r`, confirmed nothing left behind.
+- [x] **RPM** (`packaging/rpm/ai-assistant.spec`, `scripts/package/build-rpm.sh`): real `rpmbuild -bb` (via `rpm-build`'s actual binary, `/usr/bin/rpmbuild`, installed via the plain `rpm` apt package) produced a well-formed package -- `rpm -qip`/`-qlp`/`-qRp` show correct metadata, file layout, and an auto-detected `Requires:` list (glibc/libgcc SONAME versions) that rpmbuild itself derived from the binary's actual dynamic linking, not hand-written. Installing it with `rpm -i` was correctly rejected: this Debian-based sandbox has no native RPM dependency database, so `glibc`/`libc.so.6(...)` etc. aren't satisfiable even though the real libraries are present (installed via `dpkg`, invisible to `rpm`'s own provides database) -- confirmed to be an environment limitation by reading `rpm`'s own warning ("RPM should not be used directly ... use Alien instead"), not a defect in the spec file.
+- [x] **AppImage** (`packaging/appimage/`, `scripts/package/build-appimage.sh`): downloaded real `appimagetool` (continuous release, from `github.com`/`release-assets.githubusercontent.com`, both already in this sandbox's network allowlist) and built a real, complete AppImage -- runtime embedded, AppStream metadata validated inline by `appimagetool`'s own call into `appstreamcli` (which is how the metainfo filename bug above actually got caught). Ran the resulting `.AppImage` directly; it executed the bundled binary correctly.
+- [x] **Portable tarball** (`packaging/portable/` build output, `scripts/package/build-portable.sh`): the sixth format, not in Development_plan's original five but already implied by the project's own directory layout. No external packaging tool at all -- just `tar` -- so it's the most completely verified of the six: built, extracted to a clean directory, and run via its own `run.sh`.
+- [x] **`scripts/package/build-all.sh`**: runs DEB + RPM + AppImage + portable in one command; run end-to-end for real, produced all four artifacts correctly in `target/package/`.
+- [x] Every packaging script (`render-icons.sh`, five `build-*.sh` files, `packaging/appimage/AppRun`, `packaging/deb/postinst`/`postrm`) passes `shellcheck` with zero warnings.
+- [ ] **Flatpak** (`packaging/flatpak/com.lionos.AiAssistant.yml`): written to the real spec -- `org.freedesktop.Platform`/`Sdk` 23.08 runtime, a `simple` buildsystem module packaging the pre-built binary (see the note below on why, not a source build), and a `finish-args` list reasoned through explicitly against the tension between this app's own system-control mission and what Flatpak sandboxing is *for* (documented at length in the manifest's own comments, not just asserted here). `flatpak-builder --show-manifest` confirms it's fully valid JSON-parseable YAML with every field understood; a real `flatpak-builder --force-clean` build gets exactly one step further before failing, at "SDK not installed" -- confirmed empirically that this is a network wall, not a mistake, by `curl`ing `dl.flathub.org` directly and getting back this sandbox's own egress proxy's `x-deny-reason: host_not_allowed`, not a DNS or TLS failure.
+- [ ] **Snap** (`packaging/snap/snapcraft.yaml`): written to the real spec from memory (base, confinement, apps, parts, `extensions: [gnome]`, `plugin: dump` for the same pre-built-binary reason as Flatpak) -- explicitly declares `confinement: devmode` rather than `strict`, with a comment explaining why that's not a shipping configuration, matching this project's standing "don't overclaim a property that hasn't been checked" principle. No `snapcraft` binary exists via apt on this Debian-based sandbox at all (Canonical distributes it primarily as a snap, a circular problem on a system with no snapd), and `snapcraft.io` itself returned `host_not_allowed`. Only generically validated as well-formed YAML (Python's `yaml.safe_load`), not against snapcraft's actual schema.
+- [ ] **Not done, deliberately**: neither the Flatpak nor the Snap module builds Rust from source inside its own build sandbox -- both would need the *entire* workspace's `Cargo.lock` dependency tree vendored (via `flatpak-cargo-generator` for Flatpak; something equivalent for Snap), a substantial, separate undertaking orthogonal to what's actually blocking a real `ai-assistant` binary from existing yet. All six formats take the same pragmatic pre-built-binary approach for consistency, not just the two that are network-blocked anyway.
+
+### Verifying six packaging formats without a real binary to package
+
+Every format here fundamentally packages a compiled `ai-assistant`
+binary, and one has never existed in this sandbox. Rather than either
+skip real verification entirely (leaving six formats in the weakest,
+"written but never run" category this project uses for Slint/Candle
+work) or overstate what got checked, the same technique Phase 18's
+throwaway harness used for `app`'s wiring got applied here: compile a
+trivial stand-in binary (`rustc -O` on a five-line `fn main()`, named
+`ai-assistant`, placed at the normal `target/release/ai-assistant`
+location) and run every packaging script against *that*, for real,
+checking the actual packaging mechanism -- directory layout, control
+file syntax, permission bits, maintainer scripts, install/remove
+behavior -- independent of whatever ends up inside the binary itself.
+
+This is a meaningfully different, stronger claim than "the script looks
+right": `dpkg-deb --build` either produces a well-formed archive or it
+doesn't, `rpmbuild` either resolves `%{buildroot}`/`%files` correctly or
+it doesn't, `appimagetool` either assembles a runnable AppImage or it
+doesn't -- none of that depends on what the packaged binary actually
+does once it's running, only on whether it's a valid ELF executable at
+the path the script expects. A stand-in that prints one line and exits
+is exactly as valid an ELF executable, for packaging-mechanism purposes,
+as the real `ai-assistant` will be. What this *doesn't* prove: that the
+real binary's actual runtime library dependencies match the
+best-effort `Depends:`/`Requires:` lists in the .deb control file and
+.rpm spec (both explicitly say so in their own comments) -- that needs
+`ldd` against a real binary, which needs the Slint/Candle wall gone
+first.
+
+### The Flatpak/Snap network wall, and why it's not the same shape as Slint/Candle's
+
+Every other unverifiable piece of this project so far -- Slint since
+Phase 2, Candle since Phase 4, `criterion` in Phase 19 -- has been
+blocked by this sandbox's *rustc version*: real tools, reachable
+network, just a compiler too old for what they need. Flatpak and Snap
+are a different kind of wall entirely: the tools either aren't
+reachable (Flathub, `snapcraft.io`) or don't exist here at all
+(`snapcraft`), regardless of toolchain version. That's worth being
+precise about rather than lumping every "written but unverified" item
+into one undifferentiated bucket -- a future session with broader
+network access could plausibly finish verifying Flatpak and Snap today,
+with the exact toolchain this sandbox already has; it could *not*
+finish verifying Slint or Candle without a newer rustc first. Different
+problems, different fixes, so it seemed worth not blurring them
+together just because both end up in the same "not fully verified"
+checklist category.

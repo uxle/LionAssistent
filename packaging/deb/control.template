@@ -1,0 +1,16 @@
+Package: ai-assistant
+Version: __VERSION__
+Section: utils
+Priority: optional
+Architecture: __ARCH__
+Installed-Size: __INSTALLED_SIZE__
+Maintainer: Lion <noreply@example.invalid>
+Homepage: https://github.com/lion/ai-assistant
+Description: Local Linux AI Assistant
+ A local-first AI assistant for Linux desktops. Chat interface, safe
+ system control through a permission-gated tool layer, local memory,
+ and optional voice interaction -- no cloud dependency for the core
+ assistant (PRD SS1).
+ .
+ Voice features (Phase 12) additionally need espeak-ng and pocketsphinx
+ installed; see /usr/share/doc/ai-assistant/README.md.

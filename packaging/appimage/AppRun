@@ -1,0 +1,8 @@
+#!/bin/sh
+# AppImage entry point (AppImage spec: the AppDir's AppRun is what
+# actually executes when the .AppImage is run). Resolves paths relative
+# to itself so it works regardless of where the AppImage was downloaded
+# to or mounted from.
+HERE="$(dirname "$(readlink -f "${0}")")"
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH:-}"
+exec "${HERE}/usr/bin/ai-assistant" "$@"

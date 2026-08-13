@@ -13,3 +13,4 @@
 # Downloaded local models are large binaries, not source.
 /models/**
 !/models/**/.gitkeep
+.flatpak-builder/

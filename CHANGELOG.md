@@ -6,6 +6,21 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Added (Phase 20)
+
+- `LICENSE-MIT`, `LICENSE-APACHE`: fixed a pre-existing gap found while starting this phase -- the workspace declared `license = "MIT OR Apache-2.0"` since Phase 1 but no LICENSE file existed anywhere in the repository.
+- `assets/icons/`: a placeholder application icon (`ai-assistant.svg` + rendered PNGs at 16-512px via `rsvg-convert`), another pre-existing gap (no `assets/` directory existed at all). Caught and fixed two real bugs while building this: an XML double-hyphen-in-comment syntax error in the SVG, and a wrong relative path in `scripts/package/render-icons.sh`.
+- `packaging/shared/ai-assistant.desktop`: validated clean with real `desktop-file-validate` after fixing a genuine multi-main-category warning it caught.
+- `packaging/shared/com.lionos.AiAssistant.metainfo.xml`: AppStream metadata, validated clean with real `appstreamcli` after fixing a deprecated-tag warning and a filename-must-match-component-ID error it caught.
+- `packaging/deb/` + `scripts/package/build-deb.sh`: real `dpkg-deb` build, then actually installed via `dpkg -i`, run, and cleanly removed via `dpkg -r` in this sandbox (against a stand-in binary -- see `docs/ROADMAP.md`'s Phase 20 notes for why and how).
+- `packaging/rpm/ai-assistant.spec` + `scripts/package/build-rpm.sh`: real `rpmbuild -bb` build with correctly auto-detected glibc dependencies. Install correctly rejected by `rpm` in this Debian-based sandbox (no native RPM dependency database) -- an environment limitation, not a packaging defect; documented as such.
+- `packaging/appimage/` + `scripts/package/build-appimage.sh`: real AppImage built with a downloaded `appimagetool` and actually run directly.
+- `packaging/portable/` (build output) + `scripts/package/build-portable.sh`: a self-contained tarball, extracted to a clean directory and run -- the simplest of the six formats and the most completely verified, no external packaging tool involved at all.
+- `packaging/flatpak/com.lionos.AiAssistant.yml`: a real manifest with `finish-args` reasoned through explicitly against this app's own system-control mission (a genuine tension with Flatpak's sandboxing model, documented in the manifest itself). Confirmed fully valid via real `flatpak-builder --show-manifest`; a full build fails only at the runtime-fetch step because Flathub is outside this sandbox's network allowlist (confirmed empirically: `curl` to `dl.flathub.org` returns `x-deny-reason: host_not_allowed`).
+- `packaging/snap/snapcraft.yaml`: a correct manifest per the real snapcraft spec; no `snapcraft` tooling exists in this sandbox at all and `snapcraft.io` itself is blocked, so only generic YAML-validity was checked (Python's `yaml` module).
+- `scripts/package/build-all.sh`: builds all four real-buildable formats in one command; run end-to-end for real.
+- Every packaging script passes `shellcheck` with zero warnings.
+
 ### Added (Phase 19)
 
 - `integration-tests` crate (new, dev-dependencies only, no library code): cross-crate integration, adversarial security, and stress tests that no existing crate-local test covers. `tests/cross_crate_flows.rs` (3 tests) -- a plugin-contributed tool executing through a real `ToolRouter`, that same tool's panic *during execution* (not just plugin lifecycle) caught cleanly instead of crashing, and `assistant-core` + a real permission-gated tool call + `memory` persistence cooperating in one scenario (explicitly not the still-Candle-blocked automatic LLM tool-call wiring). `tests/security_adversarial.rs` (4 tests) -- two honest findings written as checked assertions: direct `Tool::execute()` calls bypass every router safety check, and `read_file` reaches any OS-readable path unconfirmed since path-scoping is deliberately deferred to `sandbox::FilesystemSandbox` (Phase 16), which nothing applies at process startup yet; plus oversized-input and repeated-denial robustness checks. `tests/stress.rs` (3 tests) -- memory search correctness at 5,000 entries, `SharedCache` capacity invariants under 32-thread contention, `event-bus` delivery under concurrent load. All 10 pass; clippy clean; fmt clean.
