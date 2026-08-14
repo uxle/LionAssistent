@@ -58,6 +58,26 @@ cargo doc --no-deps -p <crate>              # rustdoc HTML for one crate; keep t
 cargo bench -p vector-db  # or -p cache      # hand-rolled benchmarks; see their own doc comments for why not criterion
 ```
 
+**Gotcha, found the hard way during Phase 21's own tarball verification**:
+running `cargo test -p plugin-manager` *by itself* (or any other subset
+that doesn't happen to trigger building `example-plugin`'s cdylib
+target) can fail `plugin_manager::dynamic`'s tests with "cannot open
+shared object file: No such file or directory" on a fresh `target/`.
+Those tests dynamically load `example-plugin`'s compiled `.so` by a
+filesystem path, not through a normal Rust `use` -- `example-plugin`
+being listed in `plugin-manager`'s `[dev-dependencies]` is enough for
+Cargo to know the crate exists, but since nothing actually links against
+it at the Rust source level, Cargo doesn't reliably rebuild its cdylib
+artifact just from that dependency edge alone. The README's full
+documented `cargo build ... -p example-plugin ...` command (run before
+`cargo test`, as instructed, not skipped) always produces it correctly
+-- confirmed by deleting `target/` entirely and running the exact
+documented two-step sequence end to end. If you ever hit this shared
+object error while iterating on a subset of crates, `cargo build -p
+example-plugin` fixes it immediately; this isn't a flaky test, just an
+implicit build-order dependency the test's own filesystem-path approach
+doesn't declare to Cargo.
+
 ## Where things are, and the conventions that hold across all of them
 
 ```
