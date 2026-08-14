@@ -13,7 +13,13 @@
 //! (`embeddings::CachingEmbedder`, `memory::MemoryStore`'s own cache,
 //! both sized from `config::PerformanceConfig`), and a `metrics::MetricsRegistry`
 //! times the startup phases that are left so the tradeoff is visible,
-//! not just asserted.
+//! not just asserted. Phase 22 closes a gap
+//! `crates/integration-tests/tests/security_adversarial.rs` (Phase 19)
+//! documented rather than silently working around: file-reading tools
+//! have no path-scoping of their own, by design, deferring to
+//! `sandbox::FilesystemSandbox` (Phase 16) as the actual defense-in-depth
+//! layer -- which nothing applied at process startup until now. See
+//! `setup_filesystem_sandbox` below.
 //!
 //! `main` is deliberately synchronous, not `#[tokio::main]`: native GUI
 //! backends need the real OS main thread, and Slint's `run()` blocks it
@@ -101,13 +107,68 @@ fn open_memory(performance: &PerformanceConfig) -> AppResult<MemoryStore> {
     MemoryStore::open_with_search_cache(db_path, Box::new(embedder), search_cache_config)
 }
 
+/// Restricts this process's own filesystem access to the directories it
+/// actually needs (Development_plan Phase 22 "Bug Fixes", closing a gap
+/// Phase 19's `crates/integration-tests/tests/security_adversarial.rs`
+/// documented rather than silently working around: `linux_services::files`'
+/// tools have no path-scoping of their own, by design, deferring to this
+/// exact restriction as the real defense-in-depth layer -- which nothing
+/// applied at process startup until now).
+///
+/// Called *before* anything else touches disk, including `Config::load`
+/// -- these paths are the fixed set the application always needs
+/// regardless of what the (not-yet-read) config file says, so there's no
+/// ordering problem. Returns the enforcement status rather than logging
+/// it directly: `tracing` isn't initialized yet this early (it needs
+/// `config.logging_level`, which needs `Config::load`, which needs this
+/// function to have already run) -- `main` logs the result once logging
+/// is actually available.
+fn setup_filesystem_sandbox() -> AppResult<sandbox::EnforcementStatus> {
+    for dir in ["config", "models", "assets", "data", "logs"] {
+        std::fs::create_dir_all(dir)?;
+    }
+    sandbox::FilesystemSandbox::new()
+        .allow_read("config")
+        .allow_read("models")
+        .allow_read("assets")
+        .allow_read("data")
+        .allow_write("data")
+        .allow_read("logs")
+        .allow_write("logs")
+        .restrict_current_process()
+}
+
 fn main() -> AppResult<()> {
     let metrics_registry = Arc::new(MetricsRegistry::new());
+
+    let sandbox_status =
+        metrics_registry.time("startup_filesystem_sandbox", setup_filesystem_sandbox);
 
     let config = metrics_registry.time("startup_config_load", || {
         Config::load("config/default.toml")
     })?;
     logger::init(&config.logging_level);
+
+    match sandbox_status {
+        Ok(sandbox::EnforcementStatus::Enforced) => {
+            tracing::info!("filesystem sandbox enforced (Landlock) -- restricted to config/, models/, assets/, data/, logs/");
+        }
+        Ok(sandbox::EnforcementStatus::NotEnforced) => {
+            tracing::warn!(
+                "filesystem sandbox restriction call succeeded but the kernel will not \
+                 enforce it -- running WITHOUT Landlock protection (a known gap when the \
+                 kernel/environment doesn't support it; see docs/ROADMAP.md's Phase 16 and \
+                 19 notes). File-tool permission levels still apply; path-scoping does not."
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                "failed to set up the filesystem sandbox -- running WITHOUT Landlock \
+                 protection. File-tool permission levels still apply; path-scoping does not."
+            );
+        }
+    }
 
     tracing::info!(
         model = %config.model.active_model,

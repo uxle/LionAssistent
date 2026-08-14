@@ -6,6 +6,15 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Phase 22 -- Stable Release (deliberately not v1.0.0)
+
+- **Version stays at 0.1.0, deliberately.** `version.workspace = true` is shared by every crate including `app`, which has never compiled in this environment -- bumping the shared version toward 1.0.0 would put that claim on the one crate where it isn't true. See `docs/RELEASE_NOTES.md` for the full reasoning.
+- `docs/RELEASE_NOTES.md`: an honest assessment against PRD SS18's Definition of Done (two of six criteria fully met, two met at the library level but not end-to-end, two not met), a complete list of known limitations, and a concrete, dependency-ordered path to an honest future v1.0.0.
+- `docs/PERFORMANCE_REVIEW.md`: every measurable target from TDS SS9/DBDMS SS13/Archd SS19 checked against real, reproducible benchmark numbers (not projections) -- memory retrieval, database startup, and indexed search all clear their stated targets by 50-500x. Targets needing the assembled app (startup time, streaming, idle CPU) are marked honestly unverifiable rather than assumed. Includes an honest linear-extrapolation caveat: `vector_db`'s O(n) search would likely miss DBDMS's 50ms target somewhere before 1 million entries, not a problem at today's scale but worth naming.
+- **Bug fix**: `sandbox::FilesystemSandbox::restrict_current_process()` (real, tested Landlock-restriction code since Phase 16) is now actually called at `app` startup, closing the exact gap Phase 19's security tests documented (file-reading tools had no path-scoping and nothing applied the sandbox that would provide it). Restricts the process to `config/`, `models/`, `assets/`, `data/`, `logs/`; logs the real `EnforcementStatus` (Landlock enforcement is confirmed not active in this specific development sandbox, same finding as Phase 16, expected to work on a real target desktop) rather than assuming success. Verified compiles and runs correctly via a throwaway harness (this project's established technique for `app`-adjacent code); `app` itself remains unverified for the usual reason.
+- Branch `lts/0.1.0-foundation` created at this commit: a stable, fully-tested reference point for future work once a modern toolchain unblocks Slint/Candle.
+- 447/447 tests passing, unchanged (this phase's only code change was the sandbox wiring, additive and covered by the harness above, not by a crate this session already had unit tests for).
+
 ### Added (Phase 21)
 
 - `docs/API.md`: categorized crate index pointing to real `cargo doc` output (the actual API reference) rather than a hand-maintained duplicate. `cargo doc --no-deps` now builds with **zero warnings** across all 33 verified crates -- three real bugs found and fixed getting there: two doc comments (in `assistant-core` and `utilities`, both from Phase 18) linked to `#[cfg(test)]`-only test functions that don't exist in a normal doc build, and one redundant explicit link target in `workflow-engine`. A fourth, similar warning in `telemetry` (a doc link to a private constant) was also fixed.

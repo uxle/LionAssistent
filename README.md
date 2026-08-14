@@ -11,18 +11,25 @@ Roadmap) live in the project's planning documents. `docs/ROADMAP.md` tracks
 build status phase by phase. `docs/API.md`, `docs/DEVELOPER_GUIDE.md`,
 `docs/SDK_GUIDE.md`, and `docs/USER_GUIDE.md` (Phase 21) are the
 codebase-accurate, actively-maintained counterparts to those planning
-documents -- start there for anything practical.
+documents -- start there for anything practical. `docs/RELEASE_NOTES.md`
+and `docs/PERFORMANCE_REVIEW.md` (Phase 22) are the honest, evidence-based
+assessment of where this project actually stands -- read
+`docs/RELEASE_NOTES.md` first if you're deciding whether to build on this.
 
-**Status:** Phase 21 (Documentation) done -- `cargo doc` now builds with
-zero warnings across all 33 verified crates (three real broken/redundant
-doc-link bugs found and fixed getting there), four new runnable
-`examples/*.rs` demonstrate the most central usage patterns (`cache`,
-`tool-framework`, `memory`, `assistant-core` -- see `docs/API.md`), and
-`docs/DEVELOPER_GUIDE.md`/`docs/SDK_GUIDE.md`/`docs/USER_GUIDE.md`/
-`docs/API.md` are new. Also fixed a small pre-existing drift:
-`config/default.toml` never got Phase 18's `[performance]` section added
-even though Phase 17's `[ui]` fields were. Phases 1, 3, 5, 6, 7,
-8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, and 21 are fully verified
+**Status:** Phase 22 (Stable Release) done -- and deliberately **not**
+tagged v1.0.0; see `docs/RELEASE_NOTES.md` for exactly why, and for an
+honest assessment against PRD SS18's Definition of Done (two of six
+criteria fully met, two met at the library level but not end-to-end, two
+not met -- the app itself has never run). This phase also closed a real,
+previously-documented gap: Phase 16's Landlock filesystem sandbox is now
+actually wired into `app`'s startup (verified via a throwaway harness,
+the established technique for code that touches an otherwise-uncompilable
+crate), and added a data-backed `docs/PERFORMANCE_REVIEW.md` checking
+every measurable target from TDS/DBDMS against real benchmark numbers.
+The commit this ships with is also branch `lts/0.1.0-foundation`, a
+stable reference point for whenever a modern toolchain unblocks Slint and
+Candle. Phases 1, 3, 5, 6, 7,
+8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, and 22 are fully verified
 (build+test+run); Phase 17's `config::UiConfig` additions join that list
 (real, compiled, tested Rust with no Slint dependency) while everything
 touching `.slint` files or `ui/src/` remains unverified, same as Phase 2

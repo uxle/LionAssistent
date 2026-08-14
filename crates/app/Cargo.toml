@@ -22,6 +22,7 @@ embeddings = { workspace = true }
 cache = { workspace = true }
 utilities = { workspace = true }
 metrics = { workspace = true }
+sandbox = { workspace = true }
 ui = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

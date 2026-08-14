@@ -286,6 +286,7 @@ dependencies = [
  "memory",
  "metrics",
  "model-registry",
+ "sandbox",
  "tokio",
  "tracing",
  "ui",
