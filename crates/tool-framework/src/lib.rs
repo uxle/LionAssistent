@@ -32,12 +32,13 @@ use std::time::Duration;
 
 /// TCLIS SS4 tool categories.
 ///
-/// `Vision` isn't in the original TCLIS SS4 list -- it's a Development_plan
-/// Phase 23 addition (OCR, Image Understanding, Screenshot Analysis), the
-/// same way `Search` and `Automation` were already extensions beyond the
-/// SS4 base set rather than being redundant with it. TCLIS SS15 "Future
-/// Expansion" names "OCR" and "Local vision models" explicitly, so this
-/// isn't an unplanned addition, just a deferred one.
+/// `Vision` and `Development` aren't in the original TCLIS SS4 list --
+/// both are Development_plan additions (Phase 23 and Phase 24
+/// respectively), the same way `Search` and `Automation` were already
+/// extensions beyond the SS4 base set rather than being redundant with
+/// it. TCLIS SS15 "Future Expansion" names "OCR"/"local vision models"
+/// (`Vision`); Ai_reasoning SS15 names a future "Coding Agent"
+/// explicitly (`Development`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolCategory {
     System,
@@ -56,6 +57,7 @@ pub enum ToolCategory {
     Search,
     Automation,
     Vision,
+    Development,
 }
 
 /// What a tool itself reports after running (TCLIS SS8, minus the

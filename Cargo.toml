@@ -39,6 +39,7 @@ members = [
     "crates/ocr",
     "crates/vision",
     "crates/vision-runtime",
+    "crates/coding-agent",
     "crates/ui",
     "crates/app",
 ]
@@ -91,6 +92,7 @@ screenshot = { path = "crates/screenshot" }
 ocr = { path = "crates/ocr" }
 vision = { path = "crates/vision" }
 vision-runtime = { path = "crates/vision-runtime" }
+coding-agent = { path = "crates/coding-agent" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

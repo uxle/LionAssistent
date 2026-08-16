@@ -6,6 +6,25 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Phase 24 -- Coding Agent
+
+Development_plan's second "Future Phase": Code Generation, Project
+Analysis, Debugging. One new crate, `coding-agent`, structured
+differently from Phase 23 on purpose -- three internal modules rather
+than three crates, since none of these three capabilities need a
+distinct external dependency the way `screenshot`/`ocr`/`vision` each
+did (ImageMagick, tesseract, the `image` crate); all three need nothing
+beyond `std::fs`, `toml`, `serde_json`, and `assistant-core`, already
+workspace dependencies.
+
+- **`analysis`** (Project Analysis): real directory traversal (skips `target`/`node_modules`/`.git`/etc., a configurable file-walk ceiling -- `TCLIS SS7` "resource limits" -- rather than an unbounded one) plus real parsing of whichever manifest it finds (Cargo.toml via `toml`, package.json via `serde_json`, pyproject.toml handling both PEP 621's `[project.dependencies]` array and Poetry's `[tool.poetry.dependencies]` table, documented as a best-effort heuristic rather than asserted as exact the way the Cargo/npm paths are). Verified against this very workspace's own `cache` crate, not a synthetic fixture, as one of its tests.
+- **`diagnostics`** (Debugging): real `cargo check --message-format=json` integration. The actual JSON shape was confirmed empirically first -- a scratch crate with a deliberate `mismatched types` error, checked by hand, before any parsing code was written -- and that check surfaced a real nuance: one compile error produces *two* `"level":"error"` JSON lines (the located diagnostic, plus an unlocated `"aborting due to previous error"` summary). `error_count()`/`warning_count()` only count diagnostics with a real source location as a result, rather than reporting "2 errors" for what a user would recognize as one problem -- the raw, unfiltered messages are still all present in `DiagnosticReport::diagnostics`.
+- **`generation`** (Code Generation): a real, deterministic Rust template generator (`function`/`struct`/`test` scaffolding) whose output is actually compiled in its own test, not just eyeballed -- plus an honest freeform path through `assistant_core::ResponseGenerator` (the identical trait `AssistantCore::process_message` already uses for chat, reused directly rather than duplicated the way `vision::VisionBackend` was, since code generation's input/output shape is structurally identical to chat's, unlike image understanding's). With no real backend wired in, freeform generation produces `EchoResponseGenerator`'s same honest Phase 3 stub reply -- not fabricated code.
+- New `ToolCategory::Development`. `run_diagnostics` is `Destructive`, not `ReadOnly` -- a deliberate, heavily-reasoned departure (see `diagnostics::run_cargo_diagnostics`'s doc comment): `cargo check` executes `build.rs` scripts and proc-macros with this process's full privileges, unsandboxed by Cargo itself, a real Rust ecosystem risk rather than a hypothetical one. Anchored at the same level TCLIS SS6 already puts "remove packages" (a comparable "runs code from a project's own declared dependencies" risk via install scripts), not underscoped just because nothing gets deleted.
+- **`integration-tests/tests/security_adversarial.rs`**: the concrete proof behind that reasoning, not just a level check -- a real crate with a `build.rs` that writes a canary file the instant it runs. `run_diagnostics_permission_gate_prevents_build_rs_from_ever_executing` confirms a denied call means the canary is never created (the gate stops the build from starting, not merely reports a denial afterward); the paired `run_diagnostics_actually_runs_build_rs_when_genuinely_approved` proves the mechanism is real by showing the canary *does* get created with genuine approval, so the denied case isn't silently vacuous.
+- `config::CodingAgentConfig` (`max_files_walked`, genuinely wired through as `analyze_project`'s tool-level `max_files` override, not just a decorative default), backward-compatibility-tested the same way `[vision]`/`[performance]` were.
+- 512/512 tests passing (+31 over Phase 23), across 37 verified crates (+1). `cargo fmt --all -- --check` clean workspace-wide; `clippy --all-targets -D warnings` clean across all 37 verified crates; `cargo doc --no-deps` zero warnings, rechecked including `coding-agent`.
+
 ### Phase 23 -- Vision Support
 
 Development_plan's first "Future Phase": OCR, Image Understanding,

@@ -32,6 +32,12 @@ cache_ttl_seconds = 300
 ocr_language = "eng"
 screenshot_dir = "data/screenshots"
 
+[coding_agent]
+# Phase 24 (Coding Agent): file-walk ceiling for
+# coding_agent::analysis::analyze_project (see that module's own
+# comment on DEFAULT_MAX_FILES_WALKED for why this exists).
+max_files_walked = 20000
+
 enabled_tools = ["system_info", "open_application", "list_directory"]
 enabled_plugins = []
 logging_level = "info"

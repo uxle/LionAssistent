@@ -13,11 +13,17 @@
 //! verified it. Phase 23 added two new `ReadOnly` path-taking tools
 //! (`ocr`, `vision`) that inherit `read_file`'s existing unscoped-path
 //! finding, plus one `Moderate` tool (`screenshot`) that was specifically
-//! checked *not* to share it.
+//! checked *not* to share it. Phase 24 added this workspace's first
+//! `Destructive`-level tool (`run_diagnostics`) and, with it, the first
+//! test that confirms a permission gate stops a real side effect from
+//! happening at all, not just that it returns the right status code.
 
+use assistant_core::{EchoResponseGenerator, ResponseGenerator};
 use common::PermissionLevel;
-use permission_manager::{AlwaysDeny, PermissionManager, SecurityRules};
-use std::sync::Arc;
+use permission_manager::{
+    AlwaysApproveForTestingOnly, AlwaysDeny, PermissionManager, SecurityRules,
+};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tool_framework::{ResultStatus, ToolArgs, ToolRegistry, ToolRouter};
 
@@ -240,4 +246,114 @@ async fn repeated_denials_never_drift_into_an_accidental_allow() {
             .unwrap();
         assert!(!approved, "call #{i} unexpectedly approved");
     }
+}
+
+fn coding_agent_router(pm: PermissionManager) -> ToolRouter {
+    let mut registry = ToolRegistry::new();
+    coding_agent::tools::register_all(
+        &mut registry,
+        Arc::new(Mutex::new(
+            Box::new(EchoResponseGenerator) as Box<dyn ResponseGenerator>
+        )),
+    )
+    .unwrap();
+    ToolRouter::new(registry, PermissionLevel::ReadOnly).with_permission_checker(Arc::new(pm))
+}
+
+/// **The concrete proof behind `coding_agent::diagnostics`'s
+/// documented risk**, not just a level check: `run_diagnostics` is
+/// `Destructive` specifically because `cargo check` executes `build.rs`
+/// with this process's full privileges. This constructs a real crate
+/// whose `build.rs` writes a canary file the moment it runs, then
+/// confirms that a denied `run_diagnostics` call never lets that
+/// `build.rs` execute at all -- the permission gate stops the *build
+/// from starting*, not just the tool from reporting success afterward.
+/// `screenshot`/`ocr`/`vision`'s own permission tests confirm *whether*
+/// their gates hold; this one confirms *what the gate is actually for*
+/// in the one case in this workspace where getting that wrong would
+/// mean real code already ran by the time anyone found out.
+#[tokio::test]
+async fn run_diagnostics_permission_gate_prevents_build_rs_from_ever_executing() {
+    let dir = std::env::temp_dir().join("integration-test-build-rs-canary");
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    let canary = dir.join("canary.txt");
+    std::fs::write(
+        dir.join("Cargo.toml"),
+        "[package]\nname = \"canary-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("build.rs"),
+        format!(
+            "fn main() {{ std::fs::write(r#\"{}\"#, \"build.rs executed\").unwrap(); }}\n",
+            canary.display()
+        ),
+    )
+    .unwrap();
+    std::fs::write(dir.join("src/lib.rs"), "").unwrap();
+    assert!(
+        !canary.exists(),
+        "canary must not pre-exist before the test runs"
+    );
+
+    let pm = PermissionManager::in_memory(SecurityRules::default(), Box::new(AlwaysDeny)).unwrap();
+    let router = coding_agent_router(pm);
+
+    let mut args = ToolArgs::new();
+    args.insert("path".into(), serde_json::json!(dir.to_str().unwrap()));
+    let result = router.execute("run_diagnostics", args).await;
+
+    assert_eq!(result.status, ResultStatus::PermissionDenied);
+    assert!(
+        !canary.exists(),
+        "build.rs must never have run -- the permission gate has to stop the cargo \
+         invocation before it starts, not merely report a denial after the fact"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// The paired positive case: proves the mechanism above is real, not
+/// just an absence of evidence. With real approval granted, the exact
+/// same `build.rs` genuinely does execute -- confirming the *denied*
+/// case above is actually testing something (the canary really can be
+/// created by this pipeline), not silently vacuous.
+#[tokio::test]
+async fn run_diagnostics_actually_runs_build_rs_when_genuinely_approved() {
+    let dir = std::env::temp_dir().join("integration-test-build-rs-canary-approved");
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    let canary = dir.join("canary.txt");
+    std::fs::write(
+        dir.join("Cargo.toml"),
+        "[package]\nname = \"canary-fixture-approved\"\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("build.rs"),
+        format!(
+            "fn main() {{ std::fs::write(r#\"{}\"#, \"build.rs executed\").unwrap(); }}\n",
+            canary.display()
+        ),
+    )
+    .unwrap();
+    std::fs::write(dir.join("src/lib.rs"), "").unwrap();
+
+    let pm = PermissionManager::in_memory(
+        SecurityRules::default(),
+        Box::new(AlwaysApproveForTestingOnly),
+    )
+    .unwrap();
+    let router = coding_agent_router(pm);
+
+    let mut args = ToolArgs::new();
+    args.insert("path".into(), serde_json::json!(dir.to_str().unwrap()));
+    let result = router.execute("run_diagnostics", args).await;
+
+    assert_eq!(result.status, ResultStatus::Ok, "{}", result.message);
+    assert!(
+        canary.exists(),
+        "with real approval granted, build.rs should genuinely have run"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
 }

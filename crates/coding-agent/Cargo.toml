@@ -1,0 +1,19 @@
+[package]
+name = "coding-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Code Generation, Project Analysis, and Debugging (Development_plan Phase 24 'Coding Agent'; Ai_reasoning SS15 names a future 'Coding Agent' as an extension the Coordinator Agent doesn't need redesigning for). One crate, three internal modules -- unlike Phase 23's screenshot/ocr/vision (each wrapping a genuinely separate external system dependency), none of these three need anything beyond what's already in the workspace, so this follows linux-services'/workflow-engine's single-crate shape instead."
+
+[dependencies]
+common = { workspace = true }
+assistant-core = { workspace = true }
+tool-framework = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+
+[dev-dependencies]
+permission-manager = { workspace = true }
+tokio = { workspace = true }

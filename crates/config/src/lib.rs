@@ -160,6 +160,29 @@ impl Default for VisionConfig {
     }
 }
 
+/// Development_plan Phase 24 "Coding Agent" settings (PRD 6.7 settings
+/// panel). Same "documented surface, not self-enforcing" relationship
+/// `VisionConfig`'s own doc comment describes -- `Tool::execute` only
+/// ever receives `&ToolArgs`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CodingAgentConfig {
+    /// `coding_agent::analysis::analyze_project`'s file-walk ceiling.
+    /// Matches `coding_agent::analysis::DEFAULT_MAX_FILES_WALKED`
+    /// exactly -- kept in sync by convention, the same relationship
+    /// `VisionConfig::screenshot_dir` has with its own consumer's
+    /// hardcoded fallback.
+    pub max_files_walked: usize,
+}
+
+impl Default for CodingAgentConfig {
+    fn default() -> Self {
+        Self {
+            max_files_walked: 20_000,
+        }
+    }
+}
+
 /// Top-level configuration matching the fields enumerated in TDS SS6 and
 /// Apis SS11. Any field missing from the TOML file on disk falls back to
 /// its default rather than failing to load (PRD 6.7 settings panel).
@@ -170,6 +193,7 @@ pub struct Config {
     pub ui: UiConfig,
     pub performance: PerformanceConfig,
     pub vision: VisionConfig,
+    pub coding_agent: CodingAgentConfig,
     pub enabled_tools: Vec<String>,
     pub enabled_plugins: Vec<String>,
     pub logging_level: String,
@@ -182,6 +206,7 @@ impl Default for Config {
             ui: UiConfig::default(),
             performance: PerformanceConfig::default(),
             vision: VisionConfig::default(),
+            coding_agent: CodingAgentConfig::default(),
             enabled_tools: vec![
                 "system_info".to_string(),
                 "open_application".to_string(),
@@ -414,6 +439,42 @@ mod tests {
         assert_eq!(
             loaded.vision.screenshot_dir,
             VisionConfig::default().screenshot_dir
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn default_coding_agent_config_is_sane() {
+        assert_eq!(CodingAgentConfig::default().max_files_walked, 20_000);
+    }
+
+    #[test]
+    fn coding_agent_config_round_trips_through_disk() {
+        let dir = std::env::temp_dir().join(format!("ai-assistant-test-{}", common::Id::new()));
+        let path = dir.join("config.toml");
+
+        let mut cfg = Config::default();
+        cfg.coding_agent.max_files_walked = 500;
+        cfg.save(&path).unwrap();
+
+        let loaded = Config::load(&path).unwrap();
+        assert_eq!(loaded.coding_agent.max_files_walked, 500);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_config_file_written_before_phase_24_still_loads_with_sane_coding_agent_defaults() {
+        let dir = std::env::temp_dir().join(format!("ai-assistant-test-{}", common::Id::new()));
+        let path = dir.join("config.toml");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, "[ui]\ntheme = \"dark\"\n[performance]\n[vision]\n").unwrap();
+
+        let loaded = Config::load(&path).unwrap();
+        assert_eq!(
+            loaded.coding_agent.max_files_walked,
+            CodingAgentConfig::default().max_files_walked
         );
 
         std::fs::remove_dir_all(&dir).ok();

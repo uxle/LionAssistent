@@ -16,13 +16,19 @@ and `docs/PERFORMANCE_REVIEW.md` (Phase 22) are the honest, evidence-based
 assessment of where this project actually stands -- read
 `docs/RELEASE_NOTES.md` first if you're deciding whether to build on this.
 
-**Status:** Phase 23 (Vision Support) done -- `screenshot`, `ocr`, and
-`vision` are real, compiled, tested Rust with no Slint/Candle dependency
-(481/481 workspace tests, 36 verified crates); `vision-runtime` (a
-Candle-based CLIP backend) joins `llm-runtime`/`ui`/`app` as written but
-unverified in this sandbox. Phase 22 (Stable Release) is done before
-that -- and deliberately **not** tagged v1.0.0; see
-`docs/RELEASE_NOTES.md` for exactly why, and for an honest assessment
+**Status:** Phase 24 (Coding Agent) done -- `coding-agent` is real,
+compiled, tested Rust with no Slint/Candle dependency, no unverified
+half this time (unlike Phase 23's `vision-runtime`); 512/512 workspace
+tests, 37 verified crates. `run_diagnostics` is this workspace's first
+`Destructive`-level tool -- a real `build.rs`-executing scratch crate
+proved the permission gate actually stops it from running, not just
+returns a denial (`integration-tests/tests/security_adversarial.rs`).
+Phase 23 (Vision Support) is done before that -- `screenshot`, `ocr`, and
+`vision` are real, compiled, tested Rust with no Slint/Candle dependency;
+`vision-runtime` (a Candle-based CLIP backend) joins `llm-runtime`/`ui`/
+`app` as written but unverified in this sandbox. Phase 22 (Stable
+Release) is done before that -- and deliberately **not** tagged v1.0.0;
+see `docs/RELEASE_NOTES.md` for exactly why, and for an honest assessment
 against PRD SS18's Definition of Done (two of six criteria fully met,
 two met at the library level but not end-to-end, two not met -- the app
 itself has never run). That phase also closed a real, previously-
@@ -34,11 +40,11 @@ every measurable target from TDS/DBDMS against real benchmark numbers.
 The Phase 22 commit also ships as branch `lts/0.1.0-foundation`, a
 stable reference point for whenever a modern toolchain unblocks Slint and
 Candle. Phases 1, 3, 5, 6, 7,
-8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, and 23 (`screenshot`/
-`ocr`/`vision` only) are fully verified (build+test+run); Phase 17's
-`config::UiConfig` additions join that list (real, compiled, tested Rust
-with no Slint dependency) while everything touching `.slint` files or
-`ui/src/` remains unverified, same as Phase 2 always has been.
+8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23 (`screenshot`/
+`ocr`/`vision` only), and 24 are fully verified (build+test+run); Phase
+17's `config::UiConfig` additions join that list (real, compiled, tested
+Rust with no Slint dependency) while everything touching `.slint` files
+or `ui/src/` remains unverified, same as Phase 2 always has been.
 
 ## Workspace layout
 
@@ -91,6 +97,7 @@ crates/
   ocr/              tesseract CLI wrapper for text extraction (real, fully verified -- no display server needed, just the binary)
   vision/           real image analysis (dimensions/format/color via the image crate) + VisionBackend trait + an honest metadata-only stub
   vision-runtime/   Candle-based CLIP zero-shot image classifier implementing vision::VisionBackend (real API reasoned from source, unverified build -- same category as llm-runtime)
+  coding-agent/     project analysis, cargo diagnostics, and code generation/templating (real, fully verified -- run_diagnostics is this workspace's first Destructive-level tool)
   ui/               Slint desktop shell: theme, sidebar, chat view, composer, animations, accessibility (Phase 17)
   app/              binary entry point (bin name: ai-assistant)
 config/
@@ -117,10 +124,10 @@ cargo test --workspace
 cargo run -p app
 ```
 
-Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, and 23
+Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 23
 (`screenshot`/`ocr`/`vision` only -- `vision-runtime` needs Candle just
-like `llm-runtime` does) together (no Slint, no Candle) are fully
-verified and work even on old toolchains:
+like `llm-runtime` does), and 24 together (no Slint, no Candle) are
+fully verified and work even on old toolchains:
 
 ```bash
 cargo build -p common -p utilities -p config -p logger -p event-bus \
@@ -130,7 +137,7 @@ cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
   -p security -p sandbox -p cache -p integration-tests \
-  -p screenshot -p ocr -p vision
+  -p screenshot -p ocr -p vision -p coding-agent
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
@@ -138,7 +145,7 @@ cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
   -p security -p sandbox -p cache -p integration-tests \
-  -p screenshot -p ocr -p vision
+  -p screenshot -p ocr -p vision -p coding-agent
 
 # Benchmarks (dependency-free, no criterion -- see docs/ROADMAP.md Phase 19 notes):
 cargo bench -p vector-db
@@ -178,13 +185,19 @@ allowlist (see `crates/linux-services/src/terminal.rs`), never an
 arbitrary shell string. `power` (lock/suspend/restart/shutdown) is
 implemented but not registered as an automated tool anywhere in this
 codebase -- see `docs/ROADMAP.md` Phase 8 for why. Destructive tools
-(`delete_file`) and `screenshot::capture_screenshot` (`Moderate` --
+(`delete_file`, `coding_agent::run_diagnostics` -- `cargo check`
+executes `build.rs`/proc-macros with full privileges, a real risk, not
+a hypothetical one) and `screenshot::capture_screenshot` (`Moderate` --
 exposes whatever's on screen without the caller naming anything, unlike
 a caller-named file path; see that tool's own doc comment) now go
 through `permission-manager`'s real confirmation flow -- see
-`crates/linux-services/tests/permission_integration.rs` and
-`crates/screenshot/tests/permission_integration.rs` for the full
-pipeline exercised end to end.
+`crates/linux-services/tests/permission_integration.rs`,
+`crates/screenshot/tests/permission_integration.rs`, and
+`crates/coding-agent/tests/permission_integration.rs` for the full
+pipeline exercised end to end, and
+`crates/integration-tests/tests/security_adversarial.rs`'s `build.rs`
+canary tests for concrete proof that denying `run_diagnostics` actually
+stops the build from starting, not just returns an error code.
 
 To use a real model once you're building `llm-runtime`/`app` on a modern
 toolchain: download a Gemma 3 1B GGUF file and its `tokenizer.json`, name
