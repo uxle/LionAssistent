@@ -124,6 +124,42 @@ impl PerformanceConfig {
     }
 }
 
+/// Development_plan Phase 23 "Vision Support" settings (PRD 6.7 settings
+/// panel). Like `ModelConfig`/`UiConfig`/`PerformanceConfig`, this is a
+/// documented, round-trip-tested settings *surface* -- it isn't read
+/// directly by `screenshot`/`ocr`/`vision`'s own `Tool::execute`
+/// implementations, since `Tool::execute` only receives `&ToolArgs`
+/// (TCLIS SS5), not a `Config`. Turning a settings value into a real
+/// tool call's arguments is `assistant-core`'s job when it builds a
+/// request's `ToolArgs`, not something an individual tool crate does for
+/// itself -- the same not-yet-self-enforcing relationship
+/// `enabled_tools`/`enabled_plugins` below already have with the tools
+/// they name.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VisionConfig {
+    /// Tesseract language code `ocr::extract_text` expects (see that
+    /// crate's `validate_language` for the accepted shape: lowercase
+    /// letters, optionally `+`-joined, e.g. `"eng"` or `"eng+fra"`).
+    pub ocr_language: String,
+    /// Where `screenshot::capture_full_screen` writes captures by
+    /// default. Matches `screenshot::tools::CaptureScreenshotTool`'s own
+    /// hardcoded fallback (`default_output_dir`) exactly -- kept in sync
+    /// by convention for now, the same way `PerformanceConfig`'s
+    /// defaults and its consumers' own fallbacks aren't structurally
+    /// tied together either.
+    pub screenshot_dir: String,
+}
+
+impl Default for VisionConfig {
+    fn default() -> Self {
+        Self {
+            ocr_language: "eng".to_string(),
+            screenshot_dir: "data/screenshots".to_string(),
+        }
+    }
+}
+
 /// Top-level configuration matching the fields enumerated in TDS SS6 and
 /// Apis SS11. Any field missing from the TOML file on disk falls back to
 /// its default rather than failing to load (PRD 6.7 settings panel).
@@ -133,6 +169,7 @@ pub struct Config {
     pub model: ModelConfig,
     pub ui: UiConfig,
     pub performance: PerformanceConfig,
+    pub vision: VisionConfig,
     pub enabled_tools: Vec<String>,
     pub enabled_plugins: Vec<String>,
     pub logging_level: String,
@@ -144,6 +181,7 @@ impl Default for Config {
             model: ModelConfig::default(),
             ui: UiConfig::default(),
             performance: PerformanceConfig::default(),
+            vision: VisionConfig::default(),
             enabled_tools: vec![
                 "system_info".to_string(),
                 "open_application".to_string(),
@@ -329,6 +367,53 @@ mod tests {
         assert_eq!(
             loaded.performance.search_cache_capacity,
             PerformanceConfig::default().search_cache_capacity
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn default_vision_config_is_sane() {
+        let cfg = VisionConfig::default();
+        assert_eq!(cfg.ocr_language, "eng");
+        assert_eq!(cfg.screenshot_dir, "data/screenshots");
+    }
+
+    #[test]
+    fn vision_config_round_trips_through_disk() {
+        let dir = std::env::temp_dir().join(format!("ai-assistant-test-{}", common::Id::new()));
+        let path = dir.join("config.toml");
+
+        let mut cfg = Config::default();
+        cfg.vision.ocr_language = "eng+fra".to_string();
+        cfg.vision.screenshot_dir = "data/custom-screenshots".to_string();
+        cfg.save(&path).unwrap();
+
+        let loaded = Config::load(&path).unwrap();
+        assert_eq!(loaded.vision.ocr_language, "eng+fra");
+        assert_eq!(loaded.vision.screenshot_dir, "data/custom-screenshots");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_config_file_written_before_phase_23_still_loads_with_sane_vision_defaults() {
+        // Same backward-compatibility guarantee as the Phase 18 test
+        // above, now for `[vision]` -- absent here entirely, same as
+        // every pre-Phase-23 config.toml on disk actually is.
+        let dir = std::env::temp_dir().join(format!("ai-assistant-test-{}", common::Id::new()));
+        let path = dir.join("config.toml");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, "[ui]\ntheme = \"dark\"\n[performance]\n").unwrap();
+
+        let loaded = Config::load(&path).unwrap();
+        assert_eq!(
+            loaded.vision.ocr_language,
+            VisionConfig::default().ocr_language
+        );
+        assert_eq!(
+            loaded.vision.screenshot_dir,
+            VisionConfig::default().screenshot_dir
         );
 
         std::fs::remove_dir_all(&dir).ok();

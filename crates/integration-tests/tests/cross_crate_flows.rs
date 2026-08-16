@@ -202,3 +202,66 @@ async fn assistant_core_tool_execution_and_memory_cooperate_in_one_scenario() {
     assert_eq!(sessions.len(), 1);
     assert_eq!(sessions[0].id, session_id);
 }
+
+/// Phase 23's first cross-crate flow: a real screenshot captured through
+/// `screenshot`'s tool, handed as-is to `ocr`'s tool through the same
+/// router -- proving the two new crates' output/input actually fit
+/// together in practice (a captured PNG is something `ocr`'s `tesseract`
+/// wrapper can actually open), not just that their types line up on
+/// paper. Needs a real X11 display (Xvfb) the same way `screenshot`'s
+/// own crate-level doc comment describes -- see that doc comment for the
+/// exact setup this expects.
+///
+/// `Administrator` as `max_auto_level` (no `PermissionChecker`
+/// configured) rather than a real `PermissionManager`: this test isn't
+/// about permissions -- `capture_screenshot`'s `Moderate` level is
+/// already separately proven in `security_adversarial.rs` and
+/// `screenshot/tests/permission_integration.rs` -- so the simple
+/// fallback that lets both a `Moderate` and a `ReadOnly` tool through
+/// unconfirmed keeps this test focused on what it's actually checking.
+#[tokio::test]
+async fn a_real_captured_screenshot_flows_into_ocr_through_the_same_router() {
+    let Ok(display) = std::env::var("DISPLAY") else {
+        panic!(
+            "DISPLAY is not set -- this test needs a real (or Xvfb) X11 server; see \
+             screenshot's crate-level doc comment for setup"
+        );
+    };
+    assert!(!display.is_empty());
+
+    let mut registry = ToolRegistry::new();
+    screenshot::tools::register_all(&mut registry).unwrap();
+    ocr::tools::register_all(&mut registry).unwrap();
+    let router = ToolRouter::new(registry, PermissionLevel::Administrator);
+
+    let dir = std::env::temp_dir().join("integration-test-screenshot-to-ocr");
+    let mut capture_args = ToolArgs::new();
+    capture_args.insert(
+        "output_dir".into(),
+        serde_json::json!(dir.to_str().unwrap()),
+    );
+    let capture_result = router.execute("capture_screenshot", capture_args).await;
+    assert_eq!(
+        capture_result.status,
+        ResultStatus::Ok,
+        "{}",
+        capture_result.message
+    );
+    let path = capture_result.data.unwrap()["path"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let mut ocr_args = ToolArgs::new();
+    ocr_args.insert("path".into(), serde_json::json!(path));
+    let ocr_result = router.execute("extract_text_from_image", ocr_args).await;
+    assert_eq!(
+        ocr_result.status,
+        ResultStatus::Ok,
+        "ocr must be able to open and process a real screenshot capture, even if it \
+         recognizes no text in it: {}",
+        ocr_result.message
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}

@@ -1,0 +1,23 @@
+[package]
+name = "vision-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Candle-based CLIP zero-shot image classification, implementing vision::VisionBackend (Development_plan Phase 23 'Image Understanding'; Mms SS4 names CLIP-family models as a supported backend target). Same rustc 1.88+/Candle wall as llm-runtime -- see this crate's lib.rs doc comment and docs/ROADMAP.md."
+
+[dependencies]
+common = { workspace = true }
+vision = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+candle-core = "0.11"
+candle-transformers = "0.11"
+candle-nn = "0.11"
+tokenizers = "0.23"
+# Same pin as `vision`'s own Cargo.toml, for the same reason (unpinned
+# `0.25` needs edition2024). Duplicated here rather than inherited only
+# transitively through `vision` because this crate calls `image::open`
+# directly for its own preprocessing -- an explicit direct dependency
+# for code that directly `use`s it, matching how `vision`'s own Cargo.toml
+# is commented.
+image = { version = "=0.24.9", default-features = false, features = ["png", "jpeg"] }

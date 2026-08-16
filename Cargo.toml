@@ -35,6 +35,10 @@ members = [
     "crates/sandbox",
     "crates/cache",
     "crates/integration-tests",
+    "crates/screenshot",
+    "crates/ocr",
+    "crates/vision",
+    "crates/vision-runtime",
     "crates/ui",
     "crates/app",
 ]
@@ -83,6 +87,10 @@ security = { path = "crates/security" }
 sandbox = { path = "crates/sandbox" }
 cache = { path = "crates/cache" }
 integration-tests = { path = "crates/integration-tests" }
+screenshot = { path = "crates/screenshot" }
+ocr = { path = "crates/ocr" }
+vision = { path = "crates/vision" }
+vision-runtime = { path = "crates/vision-runtime" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

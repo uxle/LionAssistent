@@ -16,24 +16,29 @@ and `docs/PERFORMANCE_REVIEW.md` (Phase 22) are the honest, evidence-based
 assessment of where this project actually stands -- read
 `docs/RELEASE_NOTES.md` first if you're deciding whether to build on this.
 
-**Status:** Phase 22 (Stable Release) done -- and deliberately **not**
-tagged v1.0.0; see `docs/RELEASE_NOTES.md` for exactly why, and for an
-honest assessment against PRD SS18's Definition of Done (two of six
-criteria fully met, two met at the library level but not end-to-end, two
-not met -- the app itself has never run). This phase also closed a real,
-previously-documented gap: Phase 16's Landlock filesystem sandbox is now
-actually wired into `app`'s startup (verified via a throwaway harness,
-the established technique for code that touches an otherwise-uncompilable
+**Status:** Phase 23 (Vision Support) done -- `screenshot`, `ocr`, and
+`vision` are real, compiled, tested Rust with no Slint/Candle dependency
+(481/481 workspace tests, 36 verified crates); `vision-runtime` (a
+Candle-based CLIP backend) joins `llm-runtime`/`ui`/`app` as written but
+unverified in this sandbox. Phase 22 (Stable Release) is done before
+that -- and deliberately **not** tagged v1.0.0; see
+`docs/RELEASE_NOTES.md` for exactly why, and for an honest assessment
+against PRD SS18's Definition of Done (two of six criteria fully met,
+two met at the library level but not end-to-end, two not met -- the app
+itself has never run). That phase also closed a real, previously-
+documented gap: Phase 16's Landlock filesystem sandbox is now actually
+wired into `app`'s startup (verified via a throwaway harness, the
+established technique for code that touches an otherwise-uncompilable
 crate), and added a data-backed `docs/PERFORMANCE_REVIEW.md` checking
 every measurable target from TDS/DBDMS against real benchmark numbers.
-The commit this ships with is also branch `lts/0.1.0-foundation`, a
+The Phase 22 commit also ships as branch `lts/0.1.0-foundation`, a
 stable reference point for whenever a modern toolchain unblocks Slint and
 Candle. Phases 1, 3, 5, 6, 7,
-8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, and 22 are fully verified
-(build+test+run); Phase 17's `config::UiConfig` additions join that list
-(real, compiled, tested Rust with no Slint dependency) while everything
-touching `.slint` files or `ui/src/` remains unverified, same as Phase 2
-always has been.
+8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, and 23 (`screenshot`/
+`ocr`/`vision` only) are fully verified (build+test+run); Phase 17's
+`config::UiConfig` additions join that list (real, compiled, tested Rust
+with no Slint dependency) while everything touching `.slint` files or
+`ui/src/` remains unverified, same as Phase 2 always has been.
 
 ## Workspace layout
 
@@ -82,6 +87,10 @@ crates/
   sandbox/          rlimit-based process resource limits (verified enforced) + a Landlock filesystem sandbox (written; enforcement unverifiable in this sandbox, see docs/ROADMAP.md)
   cache/            capacity- and TTL-bounded Cache<K, V> + a thread-safe SharedCache wrapper -- backs embeddings::CachingEmbedder and memory's search-result cache
   integration-tests/  cross-crate integration, security, and stress tests (Phase 19) -- no library code, tests/ only
+  screenshot/       full-screen capture via import(X11)/grim(Wayland) (real; success verified for real against Xvfb, a first for desktop-session-dependent Linux integration in this workspace)
+  ocr/              tesseract CLI wrapper for text extraction (real, fully verified -- no display server needed, just the binary)
+  vision/           real image analysis (dimensions/format/color via the image crate) + VisionBackend trait + an honest metadata-only stub
+  vision-runtime/   Candle-based CLIP zero-shot image classifier implementing vision::VisionBackend (real API reasoned from source, unverified build -- same category as llm-runtime)
   ui/               Slint desktop shell: theme, sidebar, chat view, composer, animations, accessibility (Phase 17)
   app/              binary entry point (bin name: ai-assistant)
 config/
@@ -108,9 +117,10 @@ cargo test --workspace
 cargo run -p app
 ```
 
-Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, and 19
-together (no Slint, no Candle) are fully verified and work even on old
-toolchains:
+Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, and 23
+(`screenshot`/`ocr`/`vision` only -- `vision-runtime` needs Candle just
+like `llm-runtime` does) together (no Slint, no Candle) are fully
+verified and work even on old toolchains:
 
 ```bash
 cargo build -p common -p utilities -p config -p logger -p event-bus \
@@ -119,14 +129,16 @@ cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p reasoning -p planner -p tool-framework -p linux-services \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
-  -p security -p sandbox -p cache -p integration-tests
+  -p security -p sandbox -p cache -p integration-tests \
+  -p screenshot -p ocr -p vision
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
   -p reasoning -p planner -p tool-framework -p linux-services \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
-  -p security -p sandbox -p cache -p integration-tests
+  -p security -p sandbox -p cache -p integration-tests \
+  -p screenshot -p ocr -p vision
 
 # Benchmarks (dependency-free, no criterion -- see docs/ROADMAP.md Phase 19 notes):
 cargo bench -p vector-db
@@ -139,14 +151,40 @@ pocketsphinx-en-us sox libsox-fmt-all` on Debian/Ubuntu) or those
 specific tests will fail with "not available" errors rather than being
 skipped.
 
+`ocr`'s tests need `tesseract-ocr`/`tesseract-ocr-eng` (the actual
+capability under test) plus `imagemagick` (test-fixture generation
+only -- `ocr` itself never shells out to `convert`): `apt install
+tesseract-ocr tesseract-ocr-eng imagemagick`. `screenshot`'s tests need
+`imagemagick` too (this time for real, `capture_screenshot` shells out to
+`import`) and, unlike every other Linux-integration test in this
+workspace, an actual running X server for the duration of `cargo test`,
+not just an installed binary -- a real desktop session works, or stand up
+a virtual one:
+
+```bash
+apt install imagemagick xvfb
+Xvfb :99 -screen 0 1024x768x24 &
+export DISPLAY=:99
+cargo test -p screenshot
+```
+
+Without a reachable `DISPLAY`, `screenshot`'s capture-dependent tests
+fail outright rather than skipping silently -- same "explicit failure
+over a green checkmark that didn't prove anything" preference as
+`voice`'s note above.
+
 `linux-services`' `terminal` module only ever runs commands from a fixed
 allowlist (see `crates/linux-services/src/terminal.rs`), never an
 arbitrary shell string. `power` (lock/suspend/restart/shutdown) is
 implemented but not registered as an automated tool anywhere in this
 codebase -- see `docs/ROADMAP.md` Phase 8 for why. Destructive tools
-(`delete_file`) now go through `permission-manager`'s real confirmation
-flow -- see `crates/linux-services/tests/permission_integration.rs` for
-the full pipeline exercised end to end.
+(`delete_file`) and `screenshot::capture_screenshot` (`Moderate` --
+exposes whatever's on screen without the caller naming anything, unlike
+a caller-named file path; see that tool's own doc comment) now go
+through `permission-manager`'s real confirmation flow -- see
+`crates/linux-services/tests/permission_integration.rs` and
+`crates/screenshot/tests/permission_integration.rs` for the full
+pipeline exercised end to end.
 
 To use a real model once you're building `llm-runtime`/`app` on a modern
 toolchain: download a Gemma 3 1B GGUF file and its `tokenizer.json`, name

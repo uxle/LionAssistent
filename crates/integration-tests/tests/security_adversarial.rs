@@ -5,12 +5,15 @@
 //! cross-crate-cooperation story as a security one); the other three
 //! categories are here.
 //!
-//! Two of these tests document real, honest findings about the current
+//! Three of these tests document real, honest findings about the current
 //! security *posture* rather than bugs to fix -- see each test's doc
 //! comment. Writing them down as passing, checked assertions rather than
 //! prose matches this project's own stated principle (docs/ROADMAP.md,
 //! repeatedly): never assert a security property without having
-//! verified it.
+//! verified it. Phase 23 added two new `ReadOnly` path-taking tools
+//! (`ocr`, `vision`) that inherit `read_file`'s existing unscoped-path
+//! finding, plus one `Moderate` tool (`screenshot`) that was specifically
+//! checked *not* to share it.
 
 use common::PermissionLevel;
 use permission_manager::{AlwaysDeny, PermissionManager, SecurityRules};
@@ -96,6 +99,86 @@ async fn read_file_reaches_paths_outside_any_sandboxed_root_without_confirmation
         result.success,
         "expected read_file to succeed unconfirmed on a real system path: {}",
         result.message
+    );
+}
+
+/// Same finding as the test above, extended to Phase 23's two other
+/// `ReadOnly`, path-taking tools: `ocr::ExtractTextFromImageTool` and
+/// `vision::DescribeImageTool` were deliberately given the same
+/// `ReadOnly` level `read_file` has (see each tool's own doc comment for
+/// that reasoning), which means they inherit the identical
+/// characteristic -- no path scoping of their own, same unapplied
+/// `sandbox::FilesystemSandbox` gap as the actual intended defense.
+/// Worth confirming that held for real rather than assuming consistency
+/// with `read_file` implies it: a tool that decodes a file (image
+/// formats, in both these cases) has more surface for something to
+/// behave differently on the way to "runs without confirmation" than a
+/// straight byte read does.
+#[tokio::test]
+async fn ocr_and_vision_tools_share_read_files_unscoped_path_access() {
+    let dir = std::env::temp_dir().join("integration-test-ocr-vision-unscoped");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("outside.png");
+    let img = image::RgbImage::from_fn(4, 4, |_, _| image::Rgb([9, 9, 9]));
+    image::DynamicImage::ImageRgb8(img).save(&path).unwrap();
+
+    let ocr_pm =
+        PermissionManager::in_memory(SecurityRules::default(), Box::new(AlwaysDeny)).unwrap();
+    let mut ocr_registry = ToolRegistry::new();
+    ocr::tools::register_all(&mut ocr_registry).unwrap();
+    let ocr_router = ToolRouter::new(ocr_registry, PermissionLevel::ReadOnly)
+        .with_permission_checker(Arc::new(ocr_pm));
+
+    let mut ocr_args = ToolArgs::new();
+    ocr_args.insert("path".into(), serde_json::json!(path.to_str().unwrap()));
+    let ocr_result = ocr_router
+        .execute("extract_text_from_image", ocr_args)
+        .await;
+    assert!(
+        ocr_result.success,
+        "expected extract_text_from_image to succeed unconfirmed on a path outside any \
+         sandboxed root: {}",
+        ocr_result.message
+    );
+
+    let vision_pm =
+        PermissionManager::in_memory(SecurityRules::default(), Box::new(AlwaysDeny)).unwrap();
+    let mut vision_registry = ToolRegistry::new();
+    vision::tools::register_all(&mut vision_registry).unwrap();
+    let vision_router = ToolRouter::new(vision_registry, PermissionLevel::ReadOnly)
+        .with_permission_checker(Arc::new(vision_pm));
+
+    let mut vision_args = ToolArgs::new();
+    vision_args.insert("path".into(), serde_json::json!(path.to_str().unwrap()));
+    let vision_result = vision_router.execute("describe_image", vision_args).await;
+    assert!(
+        vision_result.success,
+        "expected describe_image to succeed unconfirmed on a path outside any sandboxed root: {}",
+        vision_result.message
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+/// `capture_screenshot`, by contrast, is deliberately `Moderate` (see
+/// `screenshot::tools::CaptureScreenshotTool`'s doc comment) -- this
+/// test is the negative case proving that distinction actually holds at
+/// the router, not just in the permission-level constant. Unlike the
+/// `ReadOnly` tools above, `AlwaysDeny` here really is asked, and really
+/// does get to say no.
+#[tokio::test]
+async fn unlike_read_file_and_ocr_and_vision_screenshot_capture_actually_asks_first() {
+    let pm = PermissionManager::in_memory(SecurityRules::default(), Box::new(AlwaysDeny)).unwrap();
+    let mut registry = ToolRegistry::new();
+    screenshot::tools::register_all(&mut registry).unwrap();
+    let router =
+        ToolRouter::new(registry, PermissionLevel::ReadOnly).with_permission_checker(Arc::new(pm));
+
+    let result = router.execute("capture_screenshot", ToolArgs::new()).await;
+    assert_eq!(
+        result.status,
+        ResultStatus::PermissionDenied,
+        "capture_screenshot must not run unconfirmed the way read_file/ocr/vision do"
     );
 }
 

@@ -20,5 +20,9 @@ vector-db = { workspace = true }
 search = { workspace = true }
 assistant-core = { workspace = true }
 event-bus = { workspace = true }
+ocr = { workspace = true }
+vision = { workspace = true }
+screenshot = { workspace = true }
+image = { version = "=0.24.9", default-features = false, features = ["png"] }
 tokio = { workspace = true }
 serde_json = { workspace = true }

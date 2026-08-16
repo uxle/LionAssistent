@@ -1,0 +1,16 @@
+[package]
+name = "ocr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Text extraction from images via a safe wrapper around the tesseract CLI (Development_plan Phase 23 'OCR'; TCLIS SS15 names OCR explicitly as planned future expansion)."
+
+[dependencies]
+common = { workspace = true }
+tool-framework = { workspace = true }
+tracing = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+permission-manager = { workspace = true }

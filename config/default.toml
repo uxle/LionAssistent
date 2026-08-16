@@ -25,6 +25,13 @@ embedding_cache_capacity = 256
 search_cache_capacity = 64
 cache_ttl_seconds = 300
 
+[vision]
+# Phase 23 (Vision Support): tesseract language for ocr::extract_text
+# (see ocr::validate_language for the accepted shape) and the default
+# directory screenshot::capture_full_screen writes captures to.
+ocr_language = "eng"
+screenshot_dir = "data/screenshots"
+
 enabled_tools = ["system_info", "open_application", "list_directory"]
 enabled_plugins = []
 logging_level = "info"
