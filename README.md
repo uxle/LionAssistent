@@ -16,14 +16,19 @@ and `docs/PERFORMANCE_REVIEW.md` (Phase 22) are the honest, evidence-based
 assessment of where this project actually stands -- read
 `docs/RELEASE_NOTES.md` first if you're deciding whether to build on this.
 
-**Status:** Phase 24 (Coding Agent) done -- `coding-agent` is real,
-compiled, tested Rust with no Slint/Candle dependency, no unverified
-half this time (unlike Phase 23's `vision-runtime`); 512/512 workspace
-tests, 37 verified crates. `run_diagnostics` is this workspace's first
-`Destructive`-level tool -- a real `build.rs`-executing scratch crate
-proved the permission gate actually stops it from running, not just
-returns a denial (`integration-tests/tests/security_adversarial.rs`).
-Phase 23 (Vision Support) is done before that -- `screenshot`, `ocr`, and
+**Status:** Phase 25 (Multi-Agent System) done -- `agents` is real,
+compiled, tested Rust: a `Coordinator`/`AgentMessage` dispatch layer
+(mirrors `ToolRouter`'s pipeline one layer up) plus five concrete
+agents, each wrapping an already-real crate; 542/542 workspace tests,
+38 verified crates. `ResearchAgent` is explicitly local-only (no
+web search anywhere in this workspace, per PRD SS3's no-cloud-dependency
+non-goal). Phase 24 (Coding Agent) is done before that -- `coding-agent`
+is real, compiled, tested Rust with no unverified half; 512/512 tests,
+37 crates. `run_diagnostics` is this workspace's first `Destructive`-
+level tool -- a real `build.rs`-executing scratch crate proved the
+permission gate actually stops it from running, not just returns a
+denial (`integration-tests/tests/security_adversarial.rs`). Phase 23
+(Vision Support) is done before that -- `screenshot`, `ocr`, and
 `vision` are real, compiled, tested Rust with no Slint/Candle dependency;
 `vision-runtime` (a Candle-based CLIP backend) joins `llm-runtime`/`ui`/
 `app` as written but unverified in this sandbox. Phase 22 (Stable
@@ -41,10 +46,10 @@ The Phase 22 commit also ships as branch `lts/0.1.0-foundation`, a
 stable reference point for whenever a modern toolchain unblocks Slint and
 Candle. Phases 1, 3, 5, 6, 7,
 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23 (`screenshot`/
-`ocr`/`vision` only), and 24 are fully verified (build+test+run); Phase
-17's `config::UiConfig` additions join that list (real, compiled, tested
-Rust with no Slint dependency) while everything touching `.slint` files
-or `ui/src/` remains unverified, same as Phase 2 always has been.
+`ocr`/`vision` only), 24, and 25 are fully verified (build+test+run);
+Phase 17's `config::UiConfig` additions join that list (real, compiled,
+tested Rust with no Slint dependency) while everything touching `.slint`
+files or `ui/src/` remains unverified, same as Phase 2 always has been.
 
 ## Workspace layout
 
@@ -98,6 +103,7 @@ crates/
   vision/           real image analysis (dimensions/format/color via the image crate) + VisionBackend trait + an honest metadata-only stub
   vision-runtime/   Candle-based CLIP zero-shot image classifier implementing vision::VisionBackend (real API reasoned from source, unverified build -- same category as llm-runtime)
   coding-agent/     project analysis, cargo diagnostics, and code generation/templating (real, fully verified -- run_diagnostics is this workspace's first Destructive-level tool)
+  agents/           Coordinator + AgentMessage dispatch (mirrors ToolRouter one layer up) plus five agents wrapping already-real crates: planner, memory, research (local search only), code, security
   ui/               Slint desktop shell: theme, sidebar, chat view, composer, animations, accessibility (Phase 17)
   app/              binary entry point (bin name: ai-assistant)
 config/
@@ -126,7 +132,7 @@ cargo run -p app
 
 Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 23
 (`screenshot`/`ocr`/`vision` only -- `vision-runtime` needs Candle just
-like `llm-runtime` does), and 24 together (no Slint, no Candle) are
+like `llm-runtime` does), 24, and 25 together (no Slint, no Candle) are
 fully verified and work even on old toolchains:
 
 ```bash
@@ -137,7 +143,7 @@ cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
   -p security -p sandbox -p cache -p integration-tests \
-  -p screenshot -p ocr -p vision -p coding-agent
+  -p screenshot -p ocr -p vision -p coding-agent -p agents
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
@@ -145,7 +151,7 @@ cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
   -p security -p sandbox -p cache -p integration-tests \
-  -p screenshot -p ocr -p vision -p coding-agent
+  -p screenshot -p ocr -p vision -p coding-agent -p agents
 
 # Benchmarks (dependency-free, no criterion -- see docs/ROADMAP.md Phase 19 notes):
 cargo bench -p vector-db

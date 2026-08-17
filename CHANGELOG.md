@@ -6,6 +6,24 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Phase 25 -- Multi-Agent System
+
+Development_plan's third "Future Phase": Planner Agent, Research Agent,
+Coding Agent, Memory Agent, Security Agent. One new crate, `agents`,
+built around a real, new piece of architecture -- `AgentMessage`
+dispatched by `Coordinator` -- with every concrete agent wrapping an
+already-real crate rather than reimplementing its capability.
+
+- `message::AgentMessage` and `coordinator::{Agent, Coordinator}`: the genuinely new part of this phase. `AgentMessage` (`sender`, `receiver`, `task_id`, `payload`, `timestamp`, `priority`) traces directly to Ai_reasoning SS13's own sentence describing agent communication. `Coordinator::dispatch` deliberately mirrors `tool_framework::ToolRouter::execute`'s exact pipeline one layer up -- lookup by name, `spawn_blocking` + enforced timeout, a structured `DispatchResult` that's never a bare Rust error -- reusing a pattern this workspace already validated rather than inventing a second one for the same underlying problem (route a named request, bound its time, report what happened).
+- `planner_agent::PlannerAgent` wraps `planner::Planner` (Phase 6) unchanged.
+- `memory_agent::MemoryAgent` wraps `memory::MemoryStore` (Phase 5) behind `Arc<Mutex<_>>`, matching `search::MemorySearchProvider`'s own established sharing pattern for this exact type.
+- `research_agent::ResearchAgent` wraps `search::SearchEngine` (Phase 13) -- **local search only**, said explicitly in its own doc comment: PRD SS3's "no cloud dependency" non-goal means "research" here means this assistant's own files/memory/commands, never the web, and no web-search capability exists anywhere in this workspace to wrap even if it wanted to.
+- `code_agent::CodeAgent` wraps `coding_agent`'s real analysis/diagnostics/template-generation functions (Phase 24) -- named `code_agent`, not `coding_agent`, specifically to avoid shadowing the `coding-agent` crate dependency's own name in scope. Freeform generation (needing a live `ResponseGenerator`) is deliberately left to `coding_agent::tools::GenerateCodeTool` rather than duplicated here -- that tool already has a clear place for managing one.
+- `security_agent::SecurityAgent` wraps `tool_framework::ToolRegistry` lookups against real, already-assigned `PermissionLevel`s -- reports what a set of named tools is actually permissioned at (TCLIS SS6's real levels), not a heuristic or invented risk score. `requires_confirmation_count` counts tools above `Safe`, matching `permission-manager::SecurityRules`'s own default `auto_approve_at_or_below: Safe` exactly.
+- **A real finding, corrected before it shipped as an overclaim**: `security_agent`'s first doc comment draft described a "natural pairing" with `PlannerAgent` (check the risk of a plan's tools). Checking `planner::Planner::create_plan`'s actual source showed every `PlanStep::tool` is hardcoded `None` -- picking a *specific* tool out of a broad `Intent` category genuinely needs language understanding a keyword classifier can't honestly provide, the same reason `planner`'s own doc comment defers multi-step decomposition to a working `llm-runtime`. The doc comment was rewritten to say so plainly (a pairing real "in principle," not yet in practice) rather than left overselling a connection that doesn't exist yet.
+- `integration-tests/tests/cross_crate_flows.rs`: `research_memory_and_security_agents_cooperate_through_one_coordinator` -- three real agents (not two) cooperating through one shared `Coordinator` in a single find-then-remember-then-check-risk scenario, this workspace's first proof the multi-agent architecture actually orchestrates multiple agents together, not just that each works in isolation.
+- 542/542 tests passing (+30 over Phase 24), across 38 verified crates (+1). `cargo fmt --all -- --check` clean workspace-wide; `clippy --all-targets -D warnings` clean across all 38 verified crates; `cargo doc --no-deps` zero warnings, rechecked including `agents`.
+
 ### Phase 24 -- Coding Agent
 
 Development_plan's second "Future Phase": Code Generation, Project

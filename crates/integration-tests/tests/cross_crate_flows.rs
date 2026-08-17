@@ -265,3 +265,111 @@ async fn a_real_captured_screenshot_flows_into_ocr_through_the_same_router() {
 
     std::fs::remove_dir_all(&dir).ok();
 }
+
+/// Phase 25's first cross-crate flow: three real agents -- `research`,
+/// `memory`, `security` -- cooperating through one `Coordinator` in a
+/// single realistic scenario (find something, remember a note about it,
+/// then check what risk the tools involved actually carry), rather than
+/// each being proven only in isolation the way their own crate-local
+/// tests already do. `code`/`planner` aren't part of this particular
+/// scenario -- not because they're less real, just because a
+/// find-then-remember-then-check-risk story doesn't naturally involve
+/// them; each has its own solid crate-local coverage already.
+#[tokio::test]
+async fn research_memory_and_security_agents_cooperate_through_one_coordinator() {
+    use agents::coordinator::{Coordinator, DispatchStatus};
+    use agents::memory_agent::MemoryAgent;
+    use agents::message::{AgentMessage, Priority};
+    use agents::research_agent::ResearchAgent;
+    use agents::security_agent::SecurityAgent;
+    use embeddings::HashingEmbedder;
+    use memory::MemoryStore;
+    use search::{CommandSearchProvider, FileSearchProvider, MemorySearchProvider, SearchEngine};
+    use std::sync::Mutex;
+
+    let dir = std::env::temp_dir().join("cross-crate-multi-agent-flow");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("quarterly-report.txt"),
+        "revenue increased due to the new agent architecture",
+    )
+    .unwrap();
+
+    let memory_store = Arc::new(Mutex::new(
+        MemoryStore::in_memory(Box::<HashingEmbedder>::default()).unwrap(),
+    ));
+
+    let mut tool_registry = ToolRegistry::new();
+    linux_services::tools::register_all(&mut tool_registry).unwrap();
+    coding_agent::tools::register_all(
+        &mut tool_registry,
+        Arc::new(Mutex::new(Box::new(assistant_core::EchoResponseGenerator)
+            as Box<dyn assistant_core::ResponseGenerator>)),
+    )
+    .unwrap();
+
+    let search_engine = Arc::new(SearchEngine::new(
+        FileSearchProvider::new(vec![dir.clone()]),
+        MemorySearchProvider::new(memory_store.clone()),
+        CommandSearchProvider::new(&tool_registry, None).unwrap(),
+    ));
+
+    let mut coordinator = Coordinator::new();
+    coordinator.register(Arc::new(ResearchAgent::new(search_engine)));
+    coordinator.register(Arc::new(MemoryAgent::new(memory_store)));
+    coordinator.register(Arc::new(SecurityAgent::new(Arc::new(tool_registry))));
+
+    // Step 1: research finds the real file.
+    let research_result = coordinator
+        .dispatch(AgentMessage::new(
+            "test",
+            "research",
+            serde_json::json!({"query": "quarterly-report", "limit": 5}),
+            Priority::Normal,
+        ))
+        .await;
+    assert_eq!(research_result.status, DispatchStatus::Ok);
+    let hits = research_result.reply.unwrap().payload["hits"].clone();
+    assert!(
+        hits.as_array().unwrap().iter().any(|h| h["kind"] == "file"),
+        "{hits:?}"
+    );
+
+    // Step 2: remember a note about what research found.
+    let remember_result = coordinator
+        .dispatch(AgentMessage::new(
+            "test",
+            "memory",
+            serde_json::json!({
+                "action": "remember",
+                "category": "project",
+                "title": "quarterly-report finding",
+                "content": "found a quarterly report mentioning the new agent architecture",
+                "importance": 4,
+            }),
+            Priority::Normal,
+        ))
+        .await;
+    assert_eq!(remember_result.status, DispatchStatus::Ok);
+    assert!(remember_result.reply.unwrap().payload["id"]
+        .as_str()
+        .is_some());
+
+    // Step 3: check the real risk of the tools this scenario touched --
+    // `read_file` (ReadOnly) and `run_diagnostics` (Destructive, Phase
+    // 24's first Destructive-level tool) together.
+    let security_result = coordinator
+        .dispatch(AgentMessage::new(
+            "test",
+            "security",
+            serde_json::json!({"tool_names": ["read_file", "run_diagnostics"]}),
+            Priority::Normal,
+        ))
+        .await;
+    assert_eq!(security_result.status, DispatchStatus::Ok);
+    let security_payload = security_result.reply.unwrap().payload;
+    assert_eq!(security_payload["highest_level"], "Destructive");
+    assert_eq!(security_payload["requires_confirmation_count"], 1);
+
+    std::fs::remove_dir_all(&dir).ok();
+}
