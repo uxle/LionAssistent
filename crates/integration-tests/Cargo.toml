@@ -25,6 +25,7 @@ vision = { workspace = true }
 screenshot = { workspace = true }
 coding-agent = { workspace = true }
 agents = { workspace = true }
+rag = { workspace = true }
 image = { version = "=0.24.9", default-features = false, features = ["png"] }
 tokio = { workspace = true }
 serde_json = { workspace = true }

@@ -373,3 +373,123 @@ async fn research_memory_and_security_agents_cooperate_through_one_coordinator()
 
     std::fs::remove_dir_all(&dir).ok();
 }
+
+/// A genuine cross-*phase* flow, not just cross-crate within one phase:
+/// `ocr` (Phase 23) extracts real text from a real generated image, that
+/// text is written to a file, and `rag` (Phase 26) indexes and finds it
+/// through a real `search_knowledge_base` call -- proving a Phase 23
+/// capability's output is genuinely consumable as Phase 26 input, not
+/// merely type-compatible on paper. Mirrors
+/// `a_real_captured_screenshot_flows_into_ocr_through_the_same_router`'s
+/// own reasoning for why this kind of test belongs here.
+///
+/// A real finding surfaced while building this test, worth keeping: the
+/// first fixture image (a tight 500x100 canvas) had real tesseract
+/// misread its first character and clip its last few -- genuine OCR
+/// imprecision at an image's edges, not a bug anywhere in this
+/// pipeline. See the fixture's own comment below for the fix and how it
+/// was confirmed.
+#[tokio::test]
+async fn ocr_extracted_text_flows_into_the_knowledge_base_and_is_found_by_search() {
+    let dir = std::env::temp_dir().join("cross-crate-ocr-to-rag");
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let image_path = dir.join("fixture.png");
+    let convert = std::process::Command::new("convert")
+        // Wide canvas relative to the text, generous margin on every
+        // side: a first attempt at 500x100 with this same text had
+        // tesseract misread the leading "Pho" as "9" and clip the
+        // trailing "rgy" -- a real OCR accuracy issue at the image's
+        // edges, not a bug in this pipeline, confirmed by hand (a
+        // 700x150 canvas with more margin reads perfectly) before this
+        // fixture's dimensions were fixed accordingly. `ocr`'s own test
+        // fixture (a shorter string) never hit this; this one only
+        // surfaced it with a longer sentence closer to the edges.
+        .args(["-size", "700x150", "xc:white"])
+        .args(["-font", "DejaVu-Sans-Bold", "-pointsize", "24"])
+        .args(["-fill", "black", "-gravity", "center"])
+        .args([
+            "-annotate",
+            "+0+0",
+            "Photosynthesis converts sunlight to energy",
+        ])
+        .arg(&image_path)
+        .output()
+        .expect("imagemagick must be installed for this test's fixture");
+    assert!(
+        convert.status.success(),
+        "{}",
+        String::from_utf8_lossy(&convert.stderr)
+    );
+
+    let mut ocr_registry = ToolRegistry::new();
+    ocr::tools::register_all(&mut ocr_registry).unwrap();
+    let ocr_router = ToolRouter::new(ocr_registry, common::PermissionLevel::ReadOnly);
+
+    let mut ocr_args = ToolArgs::new();
+    ocr_args.insert(
+        "path".into(),
+        serde_json::json!(image_path.to_str().unwrap()),
+    );
+    let ocr_result = ocr_router
+        .execute("extract_text_from_image", ocr_args)
+        .await;
+    assert_eq!(
+        ocr_result.status,
+        tool_framework::ResultStatus::Ok,
+        "{}",
+        ocr_result.message
+    );
+    let extracted_text = ocr_result.data.unwrap()["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        extracted_text.to_lowercase().contains("photosynthesis"),
+        "{extracted_text:?}"
+    );
+
+    let text_path = dir.join("extracted.txt");
+    std::fs::write(&text_path, &extracted_text).unwrap();
+
+    let kb = std::sync::Arc::new(std::sync::Mutex::new(
+        rag::store::KnowledgeBase::in_memory(Box::new(embeddings::HashingEmbedder::new(64)))
+            .unwrap(),
+    ));
+    let mut rag_registry = ToolRegistry::new();
+    rag::tools::register_all(&mut rag_registry, kb).unwrap();
+    let rag_router = ToolRouter::new(rag_registry, common::PermissionLevel::Administrator);
+
+    let mut index_args = ToolArgs::new();
+    index_args.insert(
+        "path".into(),
+        serde_json::json!(text_path.to_str().unwrap()),
+    );
+    let index_result = rag_router.execute("index_document", index_args).await;
+    assert_eq!(
+        index_result.status,
+        tool_framework::ResultStatus::Ok,
+        "{}",
+        index_result.message
+    );
+
+    let mut search_args = ToolArgs::new();
+    search_args.insert(
+        "query".into(),
+        serde_json::json!("photosynthesis sunlight energy"),
+    );
+    let search_result = rag_router
+        .execute("search_knowledge_base", search_args)
+        .await;
+    assert_eq!(search_result.status, tool_framework::ResultStatus::Ok);
+    let hits = search_result.data.unwrap();
+    let hits = hits["hits"].as_array().unwrap();
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert!(hits[0]["content"]
+        .as_str()
+        .unwrap()
+        .to_lowercase()
+        .contains("photosynthesis"));
+
+    std::fs::remove_dir_all(&dir).ok();
+}

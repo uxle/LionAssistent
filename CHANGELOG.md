@@ -6,6 +6,23 @@ Semantic Versioning once it reaches 0.1.0+ stability milestones.
 
 ## [Unreleased]
 
+### Phase 26 -- RAG System
+
+Development_plan's fourth "Future Phase": Document Indexing, PDF
+Support, Knowledge Base, Local Search. One new crate, `rag` -- a
+genuinely separate store from `memory::MemoryStore` (DBDMS's own data
+model already distinguishes "Long-Term Memory" from "Semantic Memory:
+embedded documents and notes" as different concerns), built on the same
+proven persistence shape: SQLite for durability, an in-memory
+`vector_db::VectorIndex` mirror for search.
+
+- `chunking::chunk_text`: real, deterministic word-count sliding-window chunking with configurable overlap, deliberately not attempting sentence/paragraph-aware segmentation (that needs real language understanding to do honestly -- abbreviations, decimals, and quoted speech all break a naive `.`-based splitter). A hand-traced-then-python-script-double-checked test caught a wrong chunk-count assumption before it shipped (250 words at max_words=100/overlap=20 is 3 chunks, not 4 -- the third window's end clamps to the real text length one step earlier than a quick mental count suggests).
+- `pdf::extract_pdf_text` wraps `pdf-extract`, pinned `=0.6.5` (0.7.x needs `edition2024`, confirmed empirically, the same wall class `vision`'s `image` pin and `memory`'s `rusqlite` pin already document). **A real gap found while building this module's own test fixture**: generating a test PDF via ImageMagick's `convert` produces a PDF with no extractable text layer at all -- it rasterizes the text into an embedded image, the same as scanning a printed page. Both `pdf-extract` and the system's own `pdftotext` correctly report empty output against it. The fixture is instead a minimal, hand-built, spec-correct PDF with a real text-showing content stream, independently verified with `qpdf --check` and `pdftotext` before being trusted as this crate's test input.
+- `store::KnowledgeBase`: real SQLite schema (`documents`/`chunks`/`chunk_embeddings`) plus the same `RefCell<VectorIndex<Id>>`-mirror-rebuilt-on-open pattern `memory::MemoryStore` already proved out. `index_document` detects PDF vs. plain text by extension; an empty result (a PDF with no text layer) indexes successfully with zero chunks -- a real, honest outcome, not an error. `forget_document` deletes children before parents (`chunk_embeddings` -> `chunks` -> `documents`) and returns `false`, not an error, for an unknown id, matching `MemoryStore::forget`'s own precedent. Persistence across reopening the same SQLite file is tested for real, not assumed from the schema alone.
+- Four new tools (`ToolCategory::Development`): `search_knowledge_base`/`list_indexed_documents` are `ReadOnly`; `index_document` is `Moderate` (creates new persistent data, the same reasoning `write_file`/`create_file` already get that level for); `forget_document` is `Destructive` (irreversible data loss, matching `delete_file`'s precedent -- a meaningfully higher stakes action than indexing, not the same level).
+- `integration-tests/tests/cross_crate_flows.rs`: `ocr_extracted_text_flows_into_the_knowledge_base_and_is_found_by_search` -- a genuine cross-*phase* flow, not just cross-crate: `ocr` (Phase 23) extracts real text from a real image, `rag` (Phase 26) indexes and finds it. **A second real OCR-accuracy finding surfaced building this test**: a first-attempt 500x100 fixture had tesseract genuinely misread the leading "Pho" as "9" and clip the trailing "rgy" -- real imprecision at an image's edges, confirmed by hand and fixed with a wider, better-margined canvas rather than papering over it with a looser assertion.
+- 569/569 tests passing (+27 over Phase 25), across 39 verified crates (+1). `cargo fmt --all -- --check` clean workspace-wide; `clippy --all-targets -D warnings` clean across all 39 verified crates; `cargo doc --no-deps` zero warnings, rechecked including `rag`.
+
 ### Phase 25 -- Multi-Agent System
 
 Development_plan's third "Future Phase": Planner Agent, Research Agent,
