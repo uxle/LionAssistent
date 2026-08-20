@@ -58,6 +58,10 @@ pub enum ToolCategory {
     Automation,
     Vision,
     Development,
+    /// A tool proxying to an external Model Context Protocol server
+    /// (Phase 27, `mcp::bridge`), rather than a built-in Linux
+    /// integration or local capability.
+    Mcp,
 }
 
 /// What a tool itself reports after running (TCLIS SS8, minus the

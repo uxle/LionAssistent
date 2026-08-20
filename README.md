@@ -16,7 +16,20 @@ and `docs/PERFORMANCE_REVIEW.md` (Phase 22) are the honest, evidence-based
 assessment of where this project actually stands -- read
 `docs/RELEASE_NOTES.md` first if you're deciding whether to build on this.
 
-**Status:** Phase 26 (RAG System) done -- `rag` is real, compiled,
+**Status:** Phase 27 (Model Context Protocol) done -- `mcp` is real,
+compiled, tested Rust: a client that spawns a real MCP server
+subprocess and speaks the genuine stdio JSON-RPC lifecycle, a server
+that exposes this assistant's own `ToolRouter` over MCP through the
+identical permission pipeline any other caller goes through, and the
+"External Tool Integration" bridge turning discovered remote tools
+into ordinary, permission-gated `tool_framework::Tool`s; 617/617
+workspace tests, 40 verified crates. Targets spec revision 2025-11-25,
+not the newer 2026-07-28 stateless revision -- a deliberate,
+empirically-checked choice (a real, currently-published npm reference
+server was installed and probed directly, confirming what the
+actually-installable ecosystem speaks today) rather than an oversight;
+see `docs/ROADMAP.md`'s Phase 27 section for the full reasoning. Phase
+26 (RAG System) is done before that -- `rag` is real, compiled,
 tested Rust: SQLite + `VectorIndex` persistence mirroring
 `memory::MemoryStore`'s proven shape, real PDF text extraction, real
 word-window chunking; 569/569 workspace tests, 39 verified crates. Two
@@ -113,6 +126,7 @@ crates/
   coding-agent/     project analysis, cargo diagnostics, and code generation/templating (real, fully verified -- run_diagnostics is this workspace's first Destructive-level tool)
   agents/           Coordinator + AgentMessage dispatch (mirrors ToolRouter one layer up) plus five agents wrapping already-real crates: planner, memory, research (local search only), code, security
   rag/              document indexing, PDF text extraction, and a local knowledge base with semantic search (real SQLite + VectorIndex persistence, mirrors memory::MemoryStore's proven shape)
+  mcp/              Model Context Protocol client, server, and external-tool-integration bridge; targets spec 2025-11-25 (see docs/ROADMAP.md Phase 27 for why, not 2026-07-28)
   ui/               Slint desktop shell: theme, sidebar, chat view, composer, animations, accessibility (Phase 17)
   app/              binary entry point (bin name: ai-assistant)
 config/
@@ -141,8 +155,8 @@ cargo run -p app
 
 Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 23
 (`screenshot`/`ocr`/`vision` only -- `vision-runtime` needs Candle just
-like `llm-runtime` does), 24, 25, and 26 together (no Slint, no Candle)
-are fully verified and work even on old toolchains:
+like `llm-runtime` does), 24, 25, 26, and 27 together (no Slint, no
+Candle) are fully verified and work even on old toolchains:
 
 ```bash
 cargo build -p common -p utilities -p config -p logger -p event-bus \
@@ -152,7 +166,7 @@ cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
   -p security -p sandbox -p cache -p integration-tests \
-  -p screenshot -p ocr -p vision -p coding-agent -p agents -p rag
+  -p screenshot -p ocr -p vision -p coding-agent -p agents -p rag -p mcp
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
@@ -160,12 +174,26 @@ cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
   -p security -p sandbox -p cache -p integration-tests \
-  -p screenshot -p ocr -p vision -p coding-agent -p agents -p rag
+  -p screenshot -p ocr -p vision -p coding-agent -p agents -p rag -p mcp
 
 # Benchmarks (dependency-free, no criterion -- see docs/ROADMAP.md Phase 19 notes):
 cargo bench -p vector-db
 cargo bench -p cache
 ```
+
+`mcp`'s default test suite needs nothing beyond the pinned Rust
+toolchain -- its own real subprocess round-trip test spawns a second
+binary this same crate builds (`mcp-stub-server`), not a third-party
+server. One additional test, genuine real-world interop against the
+actual `@modelcontextprotocol/server-filesystem` npm package, is
+`#[ignore]`d specifically so it doesn't add an npm/Node.js dependency
+to the default suite; run it explicitly if Node.js is available:
+
+```bash
+cargo test -p mcp --test real_reference_server_interop -- --ignored --nocapture
+```
+
+
 
 `voice`'s tests shell out to `espeak-ng`, `pocketsphinx_continuous`, and
 `sox` -- install them first (`apt install espeak-ng pocketsphinx

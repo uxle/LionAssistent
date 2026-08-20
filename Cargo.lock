@@ -3776,6 +3776,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcp"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "permission-manager",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tool-framework",
+ "tracing",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

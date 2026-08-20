@@ -1,0 +1,17 @@
+[package]
+name = "mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Model Context Protocol client, server, and external-tool-integration bridge (Development_plan Phase 27 'Model Context Protocol (MCP)'; Apis SS19 and Archd SS20 both name MCP explicitly as a future extensibility point). Targets spec revision 2025-11-25 -- see crate-level docs for why, empirically confirmed against a real, currently-published reference server rather than assumed."
+
+[dependencies]
+common = { workspace = true }
+tool-framework = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+permission-manager = { workspace = true }

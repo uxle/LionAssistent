@@ -7,6 +7,16 @@
 //! dependency. Arguments themselves are `serde_json::Value` so tool
 //! calls can round-trip through JSON when something produces them that
 //! way later (an LLM's structured tool-call output, Phase 4/8).
+//!
+//! [`ParamKind::Any`] (Phase 27) is the one deliberate escape hatch: it
+//! exists for parameters whose real shape comes from somewhere this
+//! workspace does not control -- an external MCP server's arbitrary
+//! JSON Schema property (`mcp::bridge`) is the motivating case. It
+//! accepts any JSON value and therefore validates nothing; the param
+//! is still declared (so passing it is not rejected as
+//! [`ValidationError::UnexpectedParam`]), and whatever authority does
+//! understand its real shape -- the remote MCP server, for `Any` -- is
+//! expected to validate it on its own side.
 
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -20,6 +30,9 @@ pub enum ParamKind {
     Float,
     Bool,
     StringArray,
+    /// Accepts any JSON value, including `null`. See the module-level
+    /// doc comment; this is a deliberate escape hatch, not a default.
+    Any,
 }
 
 impl ParamKind {
@@ -35,6 +48,7 @@ impl ParamKind {
                         .as_array()
                         .is_some_and(|a| a.iter().all(Value::is_string))
             }
+            ParamKind::Any => true,
         }
     }
 }
@@ -208,6 +222,27 @@ mod tests {
         args.insert("bogus".into(), json!(1));
         let errors = schema().validate(&args).unwrap_err();
         assert_eq!(errors.len(), 3); // missing text, wrong-type times, unexpected bogus
+    }
+
+    #[test]
+    fn any_accepts_every_json_shape_including_null() {
+        let schema = InputSchema::new(vec![ParamSchema::required("x", ParamKind::Any)]);
+        for value in [
+            json!(null),
+            json!(true),
+            json!(42),
+            json!(3.5),
+            json!("text"),
+            json!(["a", 2, false]),
+            json!({"nested": {"object": 1}}),
+        ] {
+            let mut args = ToolArgs::new();
+            args.insert("x".into(), value.clone());
+            assert!(
+                schema.validate(&args).is_ok(),
+                "ParamKind::Any should accept {value:?}"
+            );
+        }
     }
 
     #[test]
