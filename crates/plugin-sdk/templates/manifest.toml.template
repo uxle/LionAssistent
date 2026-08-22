@@ -1,0 +1,9 @@
+id = "{{id}}"
+name = "{{display_name}}"
+version = "0.1.0"
+author = "{{author}}"
+description = "{{description}}"
+license = "{{license}}"
+minimum_sdk_version = "0.1.0"
+supported_platforms = ["linux"]
+permissions = []

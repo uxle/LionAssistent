@@ -4860,6 +4860,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "plugin-sdk"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "plugin-manager",
+ "serde",
+ "toml 0.8.23",
+ "tool-framework",
+]
+
+[[package]]
 name = "png"
 version = "0.17.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,0 +1,39 @@
+[package]
+name = "{{crate_name}}"
+version = "0.1.0"
+edition = "2021"
+license = "{{license}}"
+description = "{{description}}"
+
+# Deliberately its own workspace root (an empty [workspace] table, not
+# absent): this plugin depends on this checkout's common/tool-framework/
+# plugin-manager via relative path dependencies, but plugin-manager's
+# own docs are explicit that a Plugin-trait plugin runs "compiled into
+# (or linked with) the host" -- it isn't required to be a *member* of
+# the assistant's own workspace to be usable, only reachable by path.
+# This table is what makes `cargo build` work standalone, right here,
+# without editing the main workspace's Cargo.toml at all. To fold this
+# plugin into the main workspace instead (sharing its Cargo.lock, its
+# `cargo build --workspace` sweep, ...), delete this table and add
+# "crates/{{crate_name}}" to that Cargo.toml's own [workspace.members].
+[workspace]
+
+[dependencies]
+common = { path = "../common" }
+tool-framework = { path = "../tool-framework" }
+plugin-manager = { path = "../plugin-manager" }
+serde_json = "1"
+
+# This crate's own [workspace] above means it resolves dependencies
+# fresh, from scratch -- it does not inherit the main assistant
+# workspace's Cargo.lock, so its own carefully-pinned transitive
+# versions (this exact workspace already hit and pinned around this
+# same wall for rusqlite/image/uuid/getrandom/zeroize/idna_adapter) do
+# not apply here automatically. Confirmed empirically, not assumed: an
+# unpinned first attempt at this template resolved indexmap 2.14.0 and
+# failed with "the package requires the Cargo feature called
+# `edition2024`, but that feature is not stabilized in this version of
+# Cargo (1.75.0)" -- the exact same wall, encountered independently,
+# pinned to the version the main workspace's own Cargo.lock already
+# proves works.
+indexmap = "=2.11.4"

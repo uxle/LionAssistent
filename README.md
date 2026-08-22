@@ -16,7 +16,20 @@ and `docs/PERFORMANCE_REVIEW.md` (Phase 22) are the honest, evidence-based
 assessment of where this project actually stands -- read
 `docs/RELEASE_NOTES.md` first if you're deciding whether to build on this.
 
-**Status:** Phase 28 (Mobile Companion) done -- `remote-control` is
+**Status:** Phase 29 (Developer Platform) done -- `plugin-sdk` is real,
+compiled, tested Rust: a local plugin catalog (reuses
+`PluginManager::discover_manifests` rather than duplicating it), a code
+generator producing a complete, genuinely-compiling `Plugin`-trait
+plugin crate from three checked-in templates, and a soft manifest
+linter layered on top of `PluginManifest`'s hard parse rules; 695/695
+workspace tests, 42 verified crates. Proven with a real `cargo build`/
+`cargo test` against real generated output, which caught a genuine
+`edition2024` dependency-resolution wall (the generated crate has its
+own independent `Cargo.lock`, so it doesn't inherit the main
+workspace's careful pins) -- see `docs/ROADMAP.md`'s Phase 29 section
+for the full reasoning, including a real test-cost finding about
+sharing Cargo's build cache across generated plugins. Phase 28 (Mobile
+Companion) is done before that -- `remote-control` is
 real, compiled, tested Rust: device pairing with a real threat model
 (short-lived code, capped attempts, LAN-only, hashed-never-stored
 tokens), a `tiny_http`-based server routing every remote tool call
@@ -142,6 +155,7 @@ crates/
   rag/              document indexing, PDF text extraction, and a local knowledge base with semantic search (real SQLite + VectorIndex persistence, mirrors memory::MemoryStore's proven shape)
   mcp/              Model Context Protocol client, server, and external-tool-integration bridge; targets spec 2025-11-25 (see docs/ROADMAP.md Phase 27 for why, not 2026-07-28)
   remote-control/   Mobile companion: device pairing, a tiny_http-based remote-control server (same ToolRouter pipeline as any local call), SSE notifications, and a dependency-free PWA (see docs/ROADMAP.md Phase 28 for why not a native Android app)
+  plugin-sdk/       Developer platform: a local plugin catalog, a code generator producing a real compiling Plugin-trait crate from checked-in templates, and manifest linting (see docs/ROADMAP.md Phase 29)
   ui/               Slint desktop shell: theme, sidebar, chat view, composer, animations, accessibility (Phase 17)
   app/              binary entry point (bin name: ai-assistant)
 config/
@@ -170,8 +184,8 @@ cargo run -p app
 
 Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 23
 (`screenshot`/`ocr`/`vision` only -- `vision-runtime` needs Candle just
-like `llm-runtime` does), 24, 25, 26, 27, and 28 together (no Slint, no
-Candle) are fully verified and work even on old toolchains:
+like `llm-runtime` does), 24, 25, 26, 27, 28, and 29 together (no
+Slint, no Candle) are fully verified and work even on old toolchains:
 
 ```bash
 cargo build -p common -p utilities -p config -p logger -p event-bus \
@@ -181,7 +195,7 @@ cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
   -p security -p sandbox -p cache -p integration-tests \
-  -p screenshot -p ocr -p vision -p coding-agent -p agents -p rag -p mcp -p remote-control
+  -p screenshot -p ocr -p vision -p coding-agent -p agents -p rag -p mcp -p remote-control -p plugin-sdk
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
@@ -189,12 +203,26 @@ cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
   -p security -p sandbox -p cache -p integration-tests \
-  -p screenshot -p ocr -p vision -p coding-agent -p agents -p rag -p mcp -p remote-control
+  -p screenshot -p ocr -p vision -p coding-agent -p agents -p rag -p mcp -p remote-control -p plugin-sdk
 
 # Benchmarks (dependency-free, no criterion -- see docs/ROADMAP.md Phase 19 notes):
 cargo bench -p vector-db
 cargo bench -p cache
 ```
+
+`plugin-sdk`'s own `tests/generated_plugin_compiles.rs` runs two real,
+separate `cargo build`/`cargo test` invocations against freshly
+generated plugin crates -- expect this crate's test suite to take
+noticeably longer (roughly a minute) than any other single crate in
+this workspace, and expect network access to crates.io on first run
+(the generated crate has its own independent `Cargo.lock`, resolved
+fresh). It cleans up after itself (a `Drop` guard removes each
+generated plugin directory, including its own nested `target/`, even
+on a panic), but leaves one deliberately persistent build-cache
+directory behind at `crates/_generated_plugin_test_shared_target/`
+(shared across both real `cargo` invocations to reuse compiled
+dependencies, the same reasoning `~/.cargo/registry` is never wiped
+automatically) -- `.gitignore`d, safe to delete manually at any time.
 
 `remote-control`'s default test suite needs nothing beyond the pinned
 Rust toolchain and network loopback -- its real client/server round

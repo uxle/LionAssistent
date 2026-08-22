@@ -1,0 +1,13 @@
+[package]
+name = "plugin-sdk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Developer Platform: a local plugin catalog, manifest linting, and a code generator that produces a real, compiling Plugin-trait crate (Development_plan Phase 29 'Developer Platform': Plugin Marketplace, SDK Improvements, Templates, Code Generator)."
+
+[dependencies]
+common = { workspace = true }
+plugin-manager = { workspace = true }
+tool-framework = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }

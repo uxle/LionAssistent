@@ -44,6 +44,7 @@ members = [
     "crates/rag",
     "crates/mcp",
     "crates/remote-control",
+    "crates/plugin-sdk",
     "crates/ui",
     "crates/app",
 ]
@@ -101,6 +102,7 @@ agents = { path = "crates/agents" }
 rag = { path = "crates/rag" }
 mcp = { path = "crates/mcp" }
 remote-control = { path = "crates/remote-control" }
+plugin-sdk = { path = "crates/plugin-sdk" }
 
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

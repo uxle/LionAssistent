@@ -4,6 +4,16 @@
 *.pdb
 .DS_Store
 
+# plugin-sdk's tests/generated_plugin_compiles.rs generates real,
+# temporary plugin crates directly under crates/ (so their relative
+# path dependencies resolve the same way a real plugin's would) and a
+# shared build-cache target dir alongside them (deliberately persistent
+# across runs, the same reasoning ~/.cargo/registry is never wiped
+# automatically -- see that test file's own docs). Per-test directories
+# are removed by a Drop guard even on panic; this is a safety net for
+# the one thing that isn't (a hard crash or Ctrl+C before Drop runs).
+crates/_generated_*/
+
 # Local runtime data (DBDMS SS2 storage structure) -- never committed.
 /data/
 /logs/
