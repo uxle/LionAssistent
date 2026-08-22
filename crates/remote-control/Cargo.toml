@@ -1,0 +1,42 @@
+[package]
+name = "remote-control"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Local-network remote control and notification relay for a paired mobile companion (Development_plan Phase 28 'Mobile Companion': Remote Control, Notifications). The 'Android App' bullet is deliberately not a native APK -- see lib.rs for why, empirically confirmed rather than assumed -- and is instead a small, dependency-free PWA served from this crate's own assets/."
+
+[dependencies]
+common = { workspace = true }
+config = { workspace = true }
+tool-framework = { workspace = true }
+event-bus = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+# Same pin reasoning as memory's/rag's Cargo.toml: rusqlite 0.32+ uses
+# c"..." string literals (stable since rustc 1.77), unavailable on the
+# pinned Rust 1.75 toolchain.
+rusqlite = { version = "=0.31.0", features = ["bundled"] }
+tiny_http = "0.12"
+sha2 = "0.10"
+# Same wall the `image`/`pdf-extract`/`uuid` pins elsewhere in this
+# workspace already document: getrandom 0.3+ needs the edition2024
+# Cargo feature, unavailable on the pinned Rust 1.75 toolchain. Pinned
+# to the exact version already resolved workspace-wide (transitively,
+# via aes-gcm/uuid in `security`/`common`) so this crate doesn't
+# introduce a second, differently-resolved copy.
+getrandom = "=0.2.17"
+
+[dev-dependencies]
+permission-manager = { workspace = true }
+# Plain HTTP only (127.0.0.1, no TLS) for the real client/server
+# round-trip test. ureq 2.x still pulls in its TLS stack by default
+# even when unused, so the same `network`/Phase 14 rustc-1.75 wall
+# applies here too -- pinned explicitly rather than left to work only
+# because `network`'s own pins happen to already constrain this
+# workspace's single shared Cargo.lock. See network/Cargo.toml's own
+# comment for the full edition2024 reasoning.
+zeroize = "=1.7.0"
+idna_adapter = "=1.1.0"
+ureq = { version = "2", features = ["json"] }

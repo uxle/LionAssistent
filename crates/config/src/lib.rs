@@ -183,6 +183,38 @@ impl Default for CodingAgentConfig {
     }
 }
 
+/// Development_plan Phase 28 "Mobile Companion" / "Remote Control"
+/// settings. `enabled` defaults to `false` deliberately: a listening
+/// network port is a real surface change from every prior phase (every
+/// other tool in this workspace is only reachable from a process
+/// already running as the local user), so it must be an explicit
+/// opt-in, never silently on just because the crate exists (PRD SS12
+/// "no silent dangerous actions", read in the spirit that applies here
+/// even though this isn't a single destructive action but a standing
+/// state change).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RemoteControlConfig {
+    pub enabled: bool,
+    /// `remote_control::server::serve`'s bind address. `127.0.0.1`
+    /// (loopback-only, unreachable from any other device) is the safe
+    /// default; a user who actually wants a phone on the LAN to reach
+    /// this must change it themselves -- matching `enabled`'s own
+    /// opt-in reasoning, not contradicting it.
+    pub bind_address: String,
+    pub port: u16,
+}
+
+impl Default for RemoteControlConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            bind_address: "127.0.0.1".to_string(),
+            port: 7887,
+        }
+    }
+}
+
 /// Top-level configuration matching the fields enumerated in TDS SS6 and
 /// Apis SS11. Any field missing from the TOML file on disk falls back to
 /// its default rather than failing to load (PRD 6.7 settings panel).
@@ -194,6 +226,7 @@ pub struct Config {
     pub performance: PerformanceConfig,
     pub vision: VisionConfig,
     pub coding_agent: CodingAgentConfig,
+    pub remote_control: RemoteControlConfig,
     pub enabled_tools: Vec<String>,
     pub enabled_plugins: Vec<String>,
     pub logging_level: String,
@@ -207,6 +240,7 @@ impl Default for Config {
             performance: PerformanceConfig::default(),
             vision: VisionConfig::default(),
             coding_agent: CodingAgentConfig::default(),
+            remote_control: RemoteControlConfig::default(),
             enabled_tools: vec![
                 "system_info".to_string(),
                 "open_application".to_string(),
@@ -475,6 +509,54 @@ mod tests {
         assert_eq!(
             loaded.coding_agent.max_files_walked,
             CodingAgentConfig::default().max_files_walked
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn remote_control_config_round_trips_through_disk() {
+        let dir = std::env::temp_dir().join(format!("ai-assistant-test-{}", common::Id::new()));
+        let path = dir.join("config.toml");
+
+        let mut cfg = Config::default();
+        cfg.remote_control.enabled = true;
+        cfg.remote_control.bind_address = "0.0.0.0".to_string();
+        cfg.remote_control.port = 9000;
+        cfg.save(&path).unwrap();
+
+        let loaded = Config::load(&path).unwrap();
+        assert!(loaded.remote_control.enabled);
+        assert_eq!(loaded.remote_control.bind_address, "0.0.0.0");
+        assert_eq!(loaded.remote_control.port, 9000);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_config_file_written_before_phase_28_still_loads_disabled_by_default() {
+        // Same backward-compatibility guarantee as the Phase 18/23
+        // tests above, now for `[remote_control]` -- absent entirely,
+        // same as every pre-Phase-28 config.toml on disk actually is.
+        // The important assertion isn't just "loads without error" --
+        // it's specifically that `enabled` comes back `false`, since a
+        // config section appearing for the first time must never
+        // silently turn a listening network port on for someone who
+        // never opted in.
+        let dir = std::env::temp_dir().join(format!("ai-assistant-test-{}", common::Id::new()));
+        let path = dir.join("config.toml");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, "[ui]\ntheme = \"dark\"\n[performance]\n").unwrap();
+
+        let loaded = Config::load(&path).unwrap();
+        assert!(!loaded.remote_control.enabled);
+        assert_eq!(
+            loaded.remote_control.bind_address,
+            RemoteControlConfig::default().bind_address
+        );
+        assert_eq!(
+            loaded.remote_control.port,
+            RemoteControlConfig::default().port
         );
 
         std::fs::remove_dir_all(&dir).ok();

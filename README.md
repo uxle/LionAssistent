@@ -16,20 +16,34 @@ and `docs/PERFORMANCE_REVIEW.md` (Phase 22) are the honest, evidence-based
 assessment of where this project actually stands -- read
 `docs/RELEASE_NOTES.md` first if you're deciding whether to build on this.
 
-**Status:** Phase 27 (Model Context Protocol) done -- `mcp` is real,
-compiled, tested Rust: a client that spawns a real MCP server
-subprocess and speaks the genuine stdio JSON-RPC lifecycle, a server
-that exposes this assistant's own `ToolRouter` over MCP through the
-identical permission pipeline any other caller goes through, and the
-"External Tool Integration" bridge turning discovered remote tools
-into ordinary, permission-gated `tool_framework::Tool`s; 617/617
-workspace tests, 40 verified crates. Targets spec revision 2025-11-25,
-not the newer 2026-07-28 stateless revision -- a deliberate,
-empirically-checked choice (a real, currently-published npm reference
-server was installed and probed directly, confirming what the
-actually-installable ecosystem speaks today) rather than an oversight;
-see `docs/ROADMAP.md`'s Phase 27 section for the full reasoning. Phase
-26 (RAG System) is done before that -- `rag` is real, compiled,
+**Status:** Phase 28 (Mobile Companion) done -- `remote-control` is
+real, compiled, tested Rust: device pairing with a real threat model
+(short-lived code, capped attempts, LAN-only, hashed-never-stored
+tokens), a `tiny_http`-based server routing every remote tool call
+through the actual `ToolRouter::execute` pipeline (same permission
+gating as a local call), and SSE-relayed live notifications from the
+real `event_bus`; 665/665 workspace tests, 41 verified crates.
+"Android App" is confirmed unbuildable in this sandbox before deciding
+anything (no installed target stdlib, no rustup, Google's distribution
+servers blocked, a real cross-compile attempt failed as predicted) --
+the same category of wall Phase 20 already named for Flatpak/Snap --
+so it's a real, tested, dependency-free PWA instead of a spec
+description of an APK; see `docs/ROADMAP.md`'s Phase 28 section for the
+full reasoning, including two real bugs the network round-trip test
+caught and how they were fixed. Phase 27 (Model Context Protocol) is
+done before that -- `mcp` is real, compiled, tested Rust: a client that
+spawns a real MCP server subprocess and speaks the genuine stdio
+JSON-RPC lifecycle, a server that exposes this assistant's own
+`ToolRouter` over MCP through the identical permission pipeline any
+other caller goes through, and the "External Tool Integration" bridge
+turning discovered remote tools into ordinary, permission-gated
+`tool_framework::Tool`s; 617/617 workspace tests, 40 verified crates.
+Targets spec revision 2025-11-25, not the newer 2026-07-28 stateless
+revision -- a deliberate, empirically-checked choice (a real,
+currently-published npm reference server was installed and probed
+directly, confirming what the actually-installable ecosystem speaks
+today) rather than an oversight. Phase 26 (RAG System) is done before
+that -- `rag` is real, compiled,
 tested Rust: SQLite + `VectorIndex` persistence mirroring
 `memory::MemoryStore`'s proven shape, real PDF text extraction, real
 word-window chunking; 569/569 workspace tests, 39 verified crates. Two
@@ -127,6 +141,7 @@ crates/
   agents/           Coordinator + AgentMessage dispatch (mirrors ToolRouter one layer up) plus five agents wrapping already-real crates: planner, memory, research (local search only), code, security
   rag/              document indexing, PDF text extraction, and a local knowledge base with semantic search (real SQLite + VectorIndex persistence, mirrors memory::MemoryStore's proven shape)
   mcp/              Model Context Protocol client, server, and external-tool-integration bridge; targets spec 2025-11-25 (see docs/ROADMAP.md Phase 27 for why, not 2026-07-28)
+  remote-control/   Mobile companion: device pairing, a tiny_http-based remote-control server (same ToolRouter pipeline as any local call), SSE notifications, and a dependency-free PWA (see docs/ROADMAP.md Phase 28 for why not a native Android app)
   ui/               Slint desktop shell: theme, sidebar, chat view, composer, animations, accessibility (Phase 17)
   app/              binary entry point (bin name: ai-assistant)
 config/
@@ -155,7 +170,7 @@ cargo run -p app
 
 Phase 1, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 23
 (`screenshot`/`ocr`/`vision` only -- `vision-runtime` needs Candle just
-like `llm-runtime` does), 24, 25, 26, and 27 together (no Slint, no
+like `llm-runtime` does), 24, 25, 26, 27, and 28 together (no Slint, no
 Candle) are fully verified and work even on old toolchains:
 
 ```bash
@@ -166,7 +181,7 @@ cargo build -p common -p utilities -p config -p logger -p event-bus \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
   -p security -p sandbox -p cache -p integration-tests \
-  -p screenshot -p ocr -p vision -p coding-agent -p agents -p rag -p mcp
+  -p screenshot -p ocr -p vision -p coding-agent -p agents -p rag -p mcp -p remote-control
 cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p conversation -p session-manager -p context-manager -p prompt-builder \
   -p assistant-core -p model-registry -p vector-db -p embeddings -p memory \
@@ -174,12 +189,23 @@ cargo test -p common -p utilities -p config -p logger -p event-bus \
   -p permission-manager -p workflow-engine -p plugin-manager -p example-plugin \
   -p voice -p search -p network -p updater -p metrics -p telemetry -p diagnostics \
   -p security -p sandbox -p cache -p integration-tests \
-  -p screenshot -p ocr -p vision -p coding-agent -p agents -p rag -p mcp
+  -p screenshot -p ocr -p vision -p coding-agent -p agents -p rag -p mcp -p remote-control
 
 # Benchmarks (dependency-free, no criterion -- see docs/ROADMAP.md Phase 19 notes):
 cargo bench -p vector-db
 cargo bench -p cache
 ```
+
+`remote-control`'s default test suite needs nothing beyond the pinned
+Rust toolchain and network loopback -- its real client/server round
+trip runs entirely over `127.0.0.1`, no external service or Android
+tooling required. Its dev-dependency on `ureq` (a real HTTP client, for
+that same real network test) is the one place outside `network`'s own
+Cargo.toml this workspace pins `zeroize`/`idna_adapter` for the
+edition2024 reason documented there -- pinned explicitly in
+`remote-control`'s own Cargo.toml rather than left to work only because
+`network`'s pins happen to already constrain this workspace's single
+shared `Cargo.lock`.
 
 `mcp`'s default test suite needs nothing beyond the pinned Rust
 toolchain -- its own real subprocess round-trip test spawns a second
@@ -192,8 +218,6 @@ to the default suite; run it explicitly if Node.js is available:
 ```bash
 cargo test -p mcp --test real_reference_server_interop -- --ignored --nocapture
 ```
-
-
 
 `voice`'s tests shell out to `espeak-ng`, `pocketsphinx_continuous`, and
 `sox` -- install them first (`apt install espeak-ng pocketsphinx

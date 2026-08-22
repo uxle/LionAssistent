@@ -1,0 +1,10 @@
+{
+  "name": "AI Assistant Remote",
+  "short_name": "Assistant",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#12141a",
+  "theme_color": "#12141a",
+  "description": "Remote control and live notifications for your Local Linux AI Assistant, paired over the local network.",
+  "icons": []
+}

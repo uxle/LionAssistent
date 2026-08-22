@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>AI Assistant Remote</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#12141a">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <header>
+      <h1>AI Assistant Remote</h1>
+      <span id="connection-dot" class="dot" aria-hidden="true"></span>
+    </header>
+
+    <section id="pair-view">
+      <p class="hint">
+        On your desktop, start pairing and enter the 6-digit code shown there.
+      </p>
+      <form id="pair-form">
+        <label for="device-label">This device's name</label>
+        <input id="device-label" type="text" placeholder="Lion's Phone" autocomplete="off" required>
+
+        <label for="pair-code">Pairing code</label>
+        <input id="pair-code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+               placeholder="000000" autocomplete="off" required>
+
+        <button type="submit">Pair this device</button>
+      </form>
+      <p id="pair-error" class="error" role="alert"></p>
+    </section>
+
+    <section id="main-view" hidden>
+      <p class="status-line">Paired as <strong id="paired-label"></strong></p>
+
+      <h2>Tools</h2>
+      <div id="tools-list" class="tools-list"></div>
+
+      <h2>Run a tool</h2>
+      <form id="execute-form">
+        <label for="tool-select">Tool</label>
+        <select id="tool-select"></select>
+
+        <label for="tool-args">Arguments (JSON)</label>
+        <textarea id="tool-args" rows="3">{}</textarea>
+
+        <button type="submit">Execute</button>
+      </form>
+      <pre id="execute-result" class="result"></pre>
+
+      <h2>Live activity</h2>
+      <ul id="notifications" class="notifications"></ul>
+
+      <button id="forget-device" class="link-button">Forget this device</button>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
