@@ -1,0 +1,21 @@
+[Unit]
+Description=Local Linux AI Assistant
+Documentation=https://github.com/ (see this project's README.md)
+# Waits for a graphical session, not just any login -- the assistant's
+# UI (Slint, Phase 2) needs a display; starting before one exists would
+# just fail and retry uselessly.
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/ai-assistant
+Restart=on-failure
+RestartSec=5
+# Deliberately no Restart=always: a crash loop should surface as a
+# stopped, inspectable failed unit (`systemctl --user status
+# ai-assistant`), not retry forever and hide a real problem from the
+# person who'd want to know about it.
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,27 @@
+[package]
+name = "os-integration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Deep Linux integration, desktop automation, and a native D-Bus API (Development_plan Phase 30 'AI Operating System Integration'). See lib.rs for what this crate deliberately does not attempt: LionOS integration and a literal 'full OS control layer', both named there with reasoning rather than silently skipped."
+
+[dependencies]
+common = { workspace = true }
+tool-framework = { workspace = true }
+tracing = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+# The C-libdbus-binding crate, not zbus: verified empirically before
+# choosing (see CHANGELOG's Phase 30 entry) that zbus 4.x's dependency
+# tree pulls in a chain of toml-ecosystem crates requiring
+# edition2024, and zbus 3.x has its own feature-flag issues under a
+# minimal build. `dbus` + `dbus-crossroads` compile cleanly with a
+# tiny, stable dependency footprint and were confirmed working
+# end-to-end (a real client/server round trip over a real session
+# bus) before being adopted here. Needs the `libdbus-1-dev` system
+# package (headers only, linked against the system's real libdbus-1).
+dbus = "0.9"
+dbus-crossroads = "0.5"
+
+[dev-dependencies]
+permission-manager = { workspace = true }
