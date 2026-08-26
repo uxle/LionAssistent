@@ -158,8 +158,8 @@ component Composer inherits Rectangle {
 
 export component AppWindow inherits Window {
     title: "Local Linux AI Assistant";
-    width: 960px;
-    height: 640px;
+    preferred-width: 900px;
+    preferred-height: 600px;
     background: Palette.window-bg;
 
     in-out property <[ChatMessage]> messages: [];
@@ -175,7 +175,7 @@ export component AppWindow inherits Window {
                 HorizontalLayout {
                     padding: Palette.space-md;
                     Text {
-                        text: "Local Linux AI Assistant -- Phase 2";
+                        text: "AI Assistant";
                         color: Palette.text-primary;
                         font-weight: 700;
                         vertical-alignment: center;
